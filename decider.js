@@ -17,15 +17,8 @@ AWS.config.update({
 
 var swf = new AWS.SWF();
 
-var newCancellablePromise = function() {
-  return new Promise(function(resolve) {
-    // resolve asynchronously, giving us a chance to cancel it
-    return setImmediate(resolve);
-  }).cancellable();
-};
-
 var cancel = function(resolve) {
-  var promise = newCancellablePromise();
+  var promise = Promise.pending().promise.cancellable();
 
   resolve(promise);
 
