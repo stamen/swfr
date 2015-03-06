@@ -164,111 +164,123 @@ var DecisionContext = function(task) {
   // console.log("activities:", this.activities);
 };
 
-DecisionContext.prototype.activity = function(name, version) {
-  var args = Array.prototype.slice.call(arguments, 2),
-      context = this;
+DecisionContext.prototype.activity = function() {
+  var options = {};
 
-  // console.log("activity: %s (%s):", name, version, args);
+  var runActivity = function(name, version) {
+    var args = Array.prototype.slice.call(arguments, 2),
+        context = this,
+        promise;
 
-  args = JSON.stringify(args);
+    // console.log("activity: %s (%s):", name, version, args);
+    console.log("options:", options);
 
-  return new Promise(function(resolve, reject) {
-    if (context.history.length > 0) {
-      var entry = context.activities[context.history[0]];
+    args = JSON.stringify(args);
 
-      // we're replaying if the task hasn't changed since the last time we
-      // attempted the workflow
-      context.replaying = entry.lastEventId <= context.task.previousStartedEventId;
+    return new Promise(function(resolve, reject) {
+      if (context.history.length > 0) {
+        var entry = context.activities[context.history[0]];
 
-      if (entry.status === "schedule-failed") {
-        // mark this entry as having been dealt with
-        context.history.shift();
+        // we're replaying if the task hasn't changed since the last time we
+        // attempted the workflow
+        context.replaying = entry.lastEventId <= context.task.previousStartedEventId;
 
-        // fall through and attempt to schedule the task again
-      } else if (entry.attributes.activityType.name === name &&
-          entry.attributes.activityType.version === version &&
-          entry.attributes.input === args) {
-        // mark this entry as having been dealt with
-        context.history.shift();
+        if (entry.attributes.activityType.name === name &&
+            entry.attributes.activityType.version === version &&
+            entry.attributes.input === args) {
+          // mark this entry as having been dealt with
+          context.history.shift();
 
-        var promise;
+          switch (entry.status) {
+          case "completed":
+            return resolve(entry.result);
 
-        switch (entry.status) {
-        case "completed":
-          return resolve(entry.result);
+          case "failed":
+          case "timeout":
+            return reject(entry.error);
 
-        case "failed":
-        case "timeout":
-          return reject(entry.error);
+          case "scheduled":
+          case "started":
+            // cancel the workflow; we can't fulfill this promise on this run
 
-        case "scheduled":
-        case "started":
-          // cancel the workflow; we can't fulfill this promise on this run
+            promise = newCancellablePromise();
 
-          promise = newCancellablePromise();
+            // pass this promise forward and immediately cancel it (to end the chain)
+            resolve(promise);
+            return promise.cancel();
 
-          // pass this promise forward and immediately cancel it (to end the chain)
-          resolve(promise);
-          return promise.cancel();
+          default:
+            console.warn("Unsupported status:", entry.status);
 
-        default:
-          console.warn("Unsupported status:", entry.status);
+            promise = newCancellablePromise();
 
-          promise = newCancellablePromise();
-
-          // pass this promise forward and immediately cancel it (to end the chain)
-          resolve(promise);
-          return promise.cancel();
-        }
-
-        return resolve(entry.result);
-      } else {
-        // TODO bubble this up to here (not the workflow)
-        return reject(new Error(util.format("Unexpected entry in history:", entry)));
-      }
-    }
-
-    // we're definitely not replaying now
-    context.replaying = false;
-
-    // do the thing
-    // console.log("Calling %s[%s](%s)", name, version, args);
-
-    var attrs = {
-          activityType: {
-            name: name,
-            version: version
-          },
-          // TODO control
-          // TODO heartbeatTimeout
-          // TODO scheduleToCloseTimeout
-          // TODO scheduleToStartTimeout
-          // TODO startToCloseTimeout
-          // TODO taskPriority
-          input: args,
-          taskList: {
-            name: "splitmerge_activity_tasklist" // TODO
+            // pass this promise forward and immediately cancel it (to end the chain)
+            resolve(promise);
+            return promise.cancel();
           }
-        },
-        // hash the attributes to give us predictable activity ids
-        // NOTE: also prevents duplicate activities
-        hashStream = crypto.createHash("sha512");
 
-    hashStream.end(JSON.stringify(attrs));
-    attrs.activityId = hashStream.read().toString("hex");
+          return resolve(entry.result);
+        } else if (entry.status === "schedule-failed") {
+          // mark this entry as having been dealt with
+          context.history.shift();
 
-    // append to decisions
-    context.decisions.push({
-      decisionType: "ScheduleActivityTask",
-      scheduleActivityTaskDecisionAttributes: attrs
+          // fall through and attempt to schedule the task again
+        } else {
+          // TODO bubble this up to here (not the workflow)
+          return reject(new Error(util.format("Unexpected entry in history:", entry)));
+        }
+      }
+
+      // we're definitely not replaying now
+      context.replaying = false;
+
+      // do the thing
+      // console.log("Calling %s[%s](%s)", name, version, args);
+
+      var attrs = {
+            activityType: {
+              name: name,
+              version: version
+            },
+            // TODO control
+            // TODO heartbeatTimeout
+            // TODO scheduleToCloseTimeout
+            // TODO scheduleToStartTimeout
+            // TODO startToCloseTimeout
+            // TODO taskPriority
+            input: args,
+            taskList: {
+              name: "splitmerge_activity_tasklist" // TODO
+            }
+          },
+          // hash the attributes to give us predictable activity ids
+          // NOTE: also prevents duplicate activities
+          hashStream = crypto.createHash("sha512");
+
+      hashStream.end(JSON.stringify(attrs));
+      attrs.activityId = hashStream.read().toString("hex");
+
+      // append to decisions
+      context.decisions.push({
+        decisionType: "ScheduleActivityTask",
+        scheduleActivityTaskDecisionAttributes: attrs
+      });
+
+      promise = newCancellablePromise();
+
+      // pass this promise forward and immediately cancel it (to end the chain)
+      resolve(promise);
+      return promise.cancel();
     });
+  }.bind(this);
 
-    var promise = newCancellablePromise();
+  if (typeof arguments[0] === "object") {
+    options = arguments[0];
 
-    // pass this promise forward and immediately cancel it (to end the chain)
-    resolve(promise);
-    return promise.cancel();
-  });
+    return runActivity;
+  }
+
+  return runActivity.apply(this, arguments);
 };
 
 DecisionContext.prototype.complete = function(result) {

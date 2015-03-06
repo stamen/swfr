@@ -25,7 +25,11 @@ var worker = decider({
 
   var calls = Promise.map([0, 1, 2, 3, 4], function(i) {
     context.status = util.format("SplitMergeActivity.noop@1.4:", i);
-    return context.activity("SplitMergeActivity.noop", "1.4", i);
+
+    return context.activity({
+      // TODO options (heartbeatTimeout, etc.)
+    })("SplitMergeActivity.noop", "1.4", i);
+
     // TODO support retries
     // // need to bind arguments to fn, as retry doesn't accept them
     // return retry(call.bind(null, "echo", i), {
