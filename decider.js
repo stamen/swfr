@@ -67,6 +67,42 @@ var DecisionContext = function(task) {
 
       break;
 
+    case "ActivityTaskFailed":
+      var attrs = event.activityTaskFailedEventAttributes,
+          eventId = attrs.scheduledEventId;
+
+      this.activities[eventId].status = "failed";
+      this.activities[eventId].reason = attrs.reason;
+
+      try {
+        var details = JSON.parse(attrs.details),
+            error = new Error(attrs.reason);
+
+        // copy properties over to the error
+        Object.keys(details).forEach(function(k) {
+          error[k] = details[k];
+        });
+
+        // provide a full-fledged error to reject with
+        this.activities[eventId].error = error;
+      } catch (err) {
+        console.warn(attrs.details, err);
+      }
+
+
+      break;
+
+    case "WorkflowExecutionStarted":
+    case "DecisionTaskScheduled":
+    case "DecisionTaskStarted":
+    case "DecisionTaskCompleted":
+      // noop
+
+      break;
+
+    default:
+      console.log("Unimplemented handler for", event.eventType);
+
     // TODO
     // "ScheduleActivityTaskFailed"
     // "ActivityTaskFailed"
@@ -111,11 +147,20 @@ DecisionContext.prototype.activity = function(name, version) {
           return resolve(entry.result);
 
         case "failed":
-          // TODO reason?
-          return reject();
+          return reject(entry.error);
+
+        case "scheduled":
+        case "started":
+          // console.log("status:", entry.status);
+
+          var promise = newCancellablePromise();
+
+          // pass this promise forward and immediately cancel it (to end the chain)
+          resolve(promise);
+          return promise.cancel();
 
         default:
-          // console.log("status:", entry.status);
+          console.warn("Unsupported status:", entry.status);
 
           var promise = newCancellablePromise();
 
@@ -206,7 +251,7 @@ var DecisionWorker = function(fn) {
         // console.warn("Chain interrupted:", err);
       })
       .catch(function(err) {
-        console.warn(err);
+        console.warn("Error in workflow:", err.stack);
       })
       .finally(function() {
         // console.log("decisions:", this.decisions);
