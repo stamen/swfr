@@ -174,7 +174,7 @@ var DecisionContext = function(task) {
 };
 
 DecisionContext.prototype.activity = function() {
-  var options = {}
+  var options = {
     // defaults go here
   };
 
@@ -215,18 +215,15 @@ DecisionContext.prototype.activity = function() {
 
             return cancel(resolve);
 
+          case "schedule-failed":
+            // break out and attempt to schedule the task again
+            break;
+
           default:
             console.warn("Unsupported status:", entry.status);
 
             return cancel(resolve);
           }
-
-          return resolve(entry.result);
-        } else if (entry.status === "schedule-failed") {
-          // mark this entry as having been dealt with
-          context.history.shift();
-
-          // fall through and attempt to schedule the task again
         } else {
           // TODO bubble this up to here (not the workflow)
           return reject(new Error(util.format("Unexpected entry in history:", entry)));
