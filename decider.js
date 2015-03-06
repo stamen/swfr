@@ -1,6 +1,7 @@
 "use strict";
 
 var assert = require("assert"),
+    crypto = require("crypto"),
     EventEmitter = require("events").EventEmitter,
     os = require("os"),
     stream = require("stream"),
@@ -30,22 +31,37 @@ var DecisionContext = function(task) {
   // we're replaying at first if this isn't the first time through the workflow
   this.replaying = this.task.previousStartedEventId !== 0;
   this.activities = {};
+  this.rescheduled = {};
 
   this.history = this.task.events.map(function(event) {
+    var eventId = event.eventId,
+        attrs;
+
     switch (event.eventType) {
     case "ActivityTaskScheduled":
-      this.activities[event.eventId] = {
+      attrs = event.activityTaskScheduledEventAttributes;
+
+      // what to write into the history
+      var toJournal = eventId;
+
+      if (this.rescheduled[attrs.activityId]) {
+        console.log("Overwriting previous event");
+        eventId = this.rescheduled[attrs.activityId];
+
+        // an entry already exists
+        toJournal = null;
+      }
+
+      this.activities[eventId] = {
         attributes: event.activityTaskScheduledEventAttributes,
         status: "scheduled",
-        lastEventId: event.eventId
+        lastEventId: eventId
       };
 
-      // the order in which events were scheduled matters (since it matches the
-      // local workflow)
-      return event.eventId;
+      return toJournal;
 
     case "ActivityTaskStarted":
-      var eventId = event.activityTaskStartedEventAttributes.scheduledEventId;
+      eventId = event.activityTaskStartedEventAttributes.scheduledEventId;
 
       this.activities[eventId].status = "started";
       this.activities[eventId].lastEventId = event.eventId;
@@ -53,8 +69,8 @@ var DecisionContext = function(task) {
       break;
 
     case "ActivityTaskCompleted":
-      var attrs = event.activityTaskCompletedEventAttributes,
-          eventId = attrs.scheduledEventId;
+      attrs = event.activityTaskCompletedEventAttributes;
+      eventId = attrs.scheduledEventId;
 
       this.activities[eventId].status = "completed";
       this.activities[eventId].lastEventId = event.eventId;
@@ -68,8 +84,8 @@ var DecisionContext = function(task) {
       break;
 
     case "ActivityTaskFailed":
-      var attrs = event.activityTaskFailedEventAttributes,
-          eventId = attrs.scheduledEventId;
+      attrs = event.activityTaskFailedEventAttributes;
+      eventId = attrs.scheduledEventId;
 
       this.activities[eventId].status = "failed";
       this.activities[eventId].reason = attrs.reason;
@@ -89,8 +105,39 @@ var DecisionContext = function(task) {
         console.warn(attrs.details, err);
       }
 
+      break;
+
+    case "ActivityTaskTimedOut":
+      attrs = event.activityTaskTimedOutEventAttributes;
+      eventId = attrs.scheduledEventId;
+
+      this.activities[eventId].status = "timeout";
+      this.activities[eventId].error = new Error(attrs.timeoutType);
 
       break;
+
+    case "ScheduleActivityTaskFailed":
+      // this occurs when re-using ids (or other reasons?)
+      // since the desired task doesn't show up in the history, it will be
+      // rescheduled on the next run-through
+
+      attrs = event.scheduleActivityTaskFailedEventAttributes;
+
+      // mark this activity as rescheduled
+      this.rescheduled[attrs.activityId] = eventId;
+
+      this.activities[eventId] = {
+        attributes: attrs,
+        status: "schedule-failed",
+        lastEventId: eventId,
+        error: new Error(attrs.cause)
+      };
+
+      console.warn("Schedule activity task failed:", attrs);
+
+      // the order in which events were scheduled matters (since it matches the
+      // local workflow)
+      return eventId;
 
     case "WorkflowExecutionStarted":
     case "DecisionTaskScheduled":
@@ -104,9 +151,6 @@ var DecisionContext = function(task) {
       console.log("Unimplemented handler for", event.eventType);
 
     // TODO
-    // "ScheduleActivityTaskFailed"
-    // "ActivityTaskFailed"
-    // "ActivityTaskTimedOut"
     // "ActivityTaskCanceled"
     // "ActivityTaskCancelRequested"
     // "RequestCancelActivityTaskFailed"
@@ -136,24 +180,32 @@ DecisionContext.prototype.activity = function(name, version) {
       // attempted the workflow
       context.replaying = entry.lastEventId <= context.task.previousStartedEventId;
 
-      if (entry.attributes.activityType.name === name &&
+      if (entry.status === "schedule-failed") {
+        // mark this entry as having been dealt with
+        context.history.shift();
+
+        // fall through and attempt to schedule the task again
+      } else if (entry.attributes.activityType.name === name &&
           entry.attributes.activityType.version === version &&
           entry.attributes.input === args) {
+        // mark this entry as having been dealt with
         context.history.shift();
-        // console.log("using history:", entry);
+
+        var promise;
 
         switch (entry.status) {
         case "completed":
           return resolve(entry.result);
 
         case "failed":
+        case "timeout":
           return reject(entry.error);
 
         case "scheduled":
         case "started":
-          // console.log("status:", entry.status);
+          // cancel the workflow; we can't fulfill this promise on this run
 
-          var promise = newCancellablePromise();
+          promise = newCancellablePromise();
 
           // pass this promise forward and immediately cancel it (to end the chain)
           resolve(promise);
@@ -162,7 +214,7 @@ DecisionContext.prototype.activity = function(name, version) {
         default:
           console.warn("Unsupported status:", entry.status);
 
-          var promise = newCancellablePromise();
+          promise = newCancellablePromise();
 
           // pass this promise forward and immediately cancel it (to end the chain)
           resolve(promise);
@@ -170,10 +222,10 @@ DecisionContext.prototype.activity = function(name, version) {
         }
 
         return resolve(entry.result);
+      } else {
+        // TODO bubble this up to here (not the workflow)
+        return reject(new Error(util.format("Unexpected entry in history:", entry)));
       }
-
-      // TODO bubble this up to here (not the workflow)
-      return reject(new Error(util.format("Unexpected entry in history:", entry)));
     }
 
     // we're definitely not replaying now
@@ -182,26 +234,33 @@ DecisionContext.prototype.activity = function(name, version) {
     // do the thing
     // console.log("Calling %s[%s](%s)", name, version, args);
 
+    var attrs = {
+          activityType: {
+            name: name,
+            version: version
+          },
+          // TODO control
+          // TODO heartbeatTimeout
+          // TODO scheduleToCloseTimeout
+          // TODO scheduleToStartTimeout
+          // TODO startToCloseTimeout
+          // TODO taskPriority
+          input: args,
+          taskList: {
+            name: "splitmerge_activity_tasklist" // TODO
+          }
+        },
+        // hash the attributes to give us predictable activity ids
+        // NOTE: also prevents duplicate activities
+        hashStream = crypto.createHash("sha512");
+
+    hashStream.end(JSON.stringify(attrs));
+    attrs.activityId = hashStream.read().toString("hex");
+
     // append to decisions
     context.decisions.push({
       decisionType: "ScheduleActivityTask",
-      scheduleActivityTaskDecisionAttributes: {
-        activityId: Date.now().toString(), // TODO UUID
-        activityType: {
-          name: name,
-          version: version
-        },
-        // TODO control
-        // TODO heartbeatTimeout
-        // TODO scheduleToCloseTimeout
-        // TODO scheduleToStartTimeout
-        // TODO startToCloseTimeout
-        // TODO taskPriority
-        input: args,
-        taskList: {
-          name: "splitmerge_activity_tasklist" // TODO
-        }
-      }
+      scheduleActivityTaskDecisionAttributes: attrs
     });
 
     var promise = newCancellablePromise();

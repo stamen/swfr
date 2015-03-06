@@ -18,7 +18,12 @@ swf.startWorkflowExecution({
   taskList: {
     name: "splitmerge_workflow_tasklist"
   },
-  input: JSON.stringify("input")
+  input: JSON.stringify("input"),
+  executionStartToCloseTimeout: '120', // 2 minutes
+  taskStartToCloseTimeout: '30' // 30 seconds
+  // TODO childPolicy
+  // TODO tagList
+  // TODO taskPriority
 }, function(err, data) {
   if (err) {
     throw err;
