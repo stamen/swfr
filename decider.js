@@ -27,18 +27,17 @@ var newCancellablePromise = function() {
 var DecisionContext = function(task) {
   this.decisions = [];
   this.task = task;
-  this.replaying = false;
+  // we're replaying at first if this isn't the first time through the workflow
+  this.replaying = this.task.previousStartedEventId !== 0;
   this.activities = {};
-
-  // replaying depends on this.task.startedEventId vs. previousStartedEventId
-  // ???
 
   this.history = this.task.events.map(function(event) {
     switch (event.eventType) {
     case "ActivityTaskScheduled":
       this.activities[event.eventId] = {
         attributes: event.activityTaskScheduledEventAttributes,
-        status: "scheduled"
+        status: "scheduled",
+        lastEventId: event.eventId
       };
 
       // the order in which events were scheduled matters (since it matches the
@@ -46,7 +45,10 @@ var DecisionContext = function(task) {
       return event.eventId;
 
     case "ActivityTaskStarted":
-      this.activities[event.activityTaskStartedEventAttributes.scheduledEventId].status = "started";
+      var eventId = event.activityTaskStartedEventAttributes.scheduledEventId;
+
+      this.activities[eventId].status = "started";
+      this.activities[eventId].lastEventId = event.eventId;
 
       break;
 
@@ -55,6 +57,7 @@ var DecisionContext = function(task) {
           eventId = attrs.scheduledEventId;
 
       this.activities[eventId].status = "completed";
+      this.activities[eventId].lastEventId = event.eventId;
 
       try {
         this.activities[eventId].result = JSON.parse(attrs.result);
@@ -93,6 +96,10 @@ DecisionContext.prototype.activity = function(name, version) {
     if (context.history.length > 0) {
       var entry = context.activities[context.history[0]];
 
+      // we're replaying if the task hasn't changed since the last time we
+      // attempted the workflow
+      context.replaying = entry.lastEventId <= context.task.previousStartedEventId;
+
       if (entry.attributes.activityType.name === name &&
           entry.attributes.activityType.version === version &&
           entry.attributes.input === args) {
@@ -123,6 +130,9 @@ DecisionContext.prototype.activity = function(name, version) {
       // TODO bubble this up to here (not the workflow)
       return reject(new Error(util.format("Unexpected entry in history:", entry)));
     }
+
+    // we're definitely not replaying now
+    context.replaying = false;
 
     // do the thing
     // console.log("Calling %s[%s](%s)", name, version, args);
