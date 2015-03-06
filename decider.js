@@ -33,7 +33,7 @@ var DecisionContext = function(task) {
   this.activities = {};
   this.rescheduled = {};
 
-  this.history = this.task.events.map(function(event) {
+  this.task.events.forEach(function(event) {
     var eventId = event.eventId,
         attrs;
 
@@ -43,27 +43,29 @@ var DecisionContext = function(task) {
       // necessarily executed in order
       attrs = event.activityTaskScheduledEventAttributes;
 
-      // what to write into the history
-      var toJournal = eventId;
-
-      if (this.rescheduled[attrs.activityId]) {
-        console.log("Overwriting previous event");
-        eventId = this.rescheduled[attrs.activityId];
-
-        // an entry already exists
-        toJournal = null;
-      }
+      // console.log("activity task scheduled: %j", attrs);
 
       this.activities[eventId] = {
-        attributes: event.activityTaskScheduledEventAttributes,
+        attributes: attrs,
         status: "scheduled",
         lastEventId: eventId
       };
 
-      return toJournal;
+      // index by activity id
+      var key = JSON.stringify({
+        name: attrs.activityType.name,
+        version: attrs.activityType.version,
+        input: attrs.input
+      });
+
+      this.activities[key] = eventId;
+
+      break;
 
     case "ActivityTaskStarted":
       eventId = event.activityTaskStartedEventAttributes.scheduledEventId;
+
+      // console.log("activity task started: %j", event);
 
       this.activities[eventId].status = "started";
       this.activities[eventId].lastEventId = event.eventId;
@@ -137,9 +139,7 @@ var DecisionContext = function(task) {
 
       console.warn("Schedule activity task failed:", attrs);
 
-      // the order in which events were scheduled matters (since it matches the
-      // local workflow)
-      return eventId;
+      break;
 
     case "WorkflowExecutionStarted":
     case "DecisionTaskScheduled":
@@ -157,12 +157,8 @@ var DecisionContext = function(task) {
     // "ActivityTaskCancelRequested"
     // "RequestCancelActivityTaskFailed"
     }
-  }.bind(this)).filter(function(id) {
-    // filter out nulls
-    return !!id;
-  });
+  }.bind(this));
 
-  // console.log("history:", this.history);
   // console.log("activities:", this.activities);
 };
 
@@ -181,8 +177,16 @@ DecisionContext.prototype.activity = function() {
     args = JSON.stringify(args);
 
     return new Promise(function(resolve, reject) {
-      if (context.history.length > 0) {
-        var entry = context.activities[context.history[0]];
+      var key = JSON.stringify({
+        name: name,
+        version: version,
+        input: args
+      });
+
+      var eventId = context.activities[key];
+
+      if (context.activities[eventId]) {
+        var entry = context.activities[eventId];
 
         // we're replaying if the task hasn't changed since the last time we
         // attempted the workflow
@@ -191,8 +195,6 @@ DecisionContext.prototype.activity = function() {
         if (entry.attributes.activityType.name === name &&
             entry.attributes.activityType.version === version &&
             entry.attributes.input === args) {
-          // mark this entry as having been dealt with
-          context.history.shift();
 
           switch (entry.status) {
           case "completed":
