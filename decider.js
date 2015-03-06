@@ -9,8 +9,7 @@ var assert = require("assert"),
 
 var _ = require("highland"),
     AWS = require("aws-sdk"),
-    Promise = require("bluebird"),
-    retry = require("bluebird-retry");
+    Promise = require("bluebird");
 
 AWS.config.update({
   region: process.env.AWS_DEFAULT_REGION || "us-east-1"
@@ -23,6 +22,14 @@ var newCancellablePromise = function() {
     // resolve asynchronously, giving us a chance to cancel it
     return setImmediate(resolve);
   }).cancellable();
+};
+
+var cancel = function(resolve) {
+  var promise = newCancellablePromise();
+
+  resolve(promise);
+
+  return promise.cancel();
 };
 
 var DecisionContext = function(task) {
@@ -39,6 +46,8 @@ var DecisionContext = function(task) {
 
     switch (event.eventType) {
     case "ActivityTaskScheduled":
+      // activities appear to be scheduled in order even if they're not
+      // necessarily executed in order
       attrs = event.activityTaskScheduledEventAttributes;
 
       // what to write into the history
@@ -165,15 +174,16 @@ var DecisionContext = function(task) {
 };
 
 DecisionContext.prototype.activity = function() {
-  var options = {};
+  var options = {}
+    // defaults go here
+  };
 
   var runActivity = function(name, version) {
     var args = Array.prototype.slice.call(arguments, 2),
-        context = this,
-        promise;
+        context = this;
 
     // console.log("activity: %s (%s):", name, version, args);
-    console.log("options:", options);
+    // console.log("options:", options);
 
     args = JSON.stringify(args);
 
@@ -203,20 +213,12 @@ DecisionContext.prototype.activity = function() {
           case "started":
             // cancel the workflow; we can't fulfill this promise on this run
 
-            promise = newCancellablePromise();
-
-            // pass this promise forward and immediately cancel it (to end the chain)
-            resolve(promise);
-            return promise.cancel();
+            return cancel(resolve);
 
           default:
             console.warn("Unsupported status:", entry.status);
 
-            promise = newCancellablePromise();
-
-            // pass this promise forward and immediately cancel it (to end the chain)
-            resolve(promise);
-            return promise.cancel();
+            return cancel(resolve);
           }
 
           return resolve(entry.result);
@@ -266,16 +268,17 @@ DecisionContext.prototype.activity = function() {
         scheduleActivityTaskDecisionAttributes: attrs
       });
 
-      promise = newCancellablePromise();
-
-      // pass this promise forward and immediately cancel it (to end the chain)
-      resolve(promise);
-      return promise.cancel();
+      return cancel(resolve);
     });
   }.bind(this);
 
   if (typeof arguments[0] === "object") {
-    options = arguments[0];
+    var providedOptions = arguments[0];
+
+    // copy options
+    Object.keys(providedOptions).forEach(function(k) {
+      options[k] = providedOptions[k];
+    });
 
     return runActivity;
   }
