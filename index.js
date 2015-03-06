@@ -8,8 +8,7 @@ var assert = require("assert"),
     util = require("util");
 
 var _ = require("highland"),
-    AWS = require("aws-sdk"),
-    yaml = require("js-yaml");
+    AWS = require("aws-sdk");
 
 var agent = new https.Agent({
   // Infinity just boosts the max value; in practice this will be no larger
@@ -58,7 +57,7 @@ var Worker = function(fn) {
         return swf.respondActivityTaskFailed({
           taskToken: task.taskToken,
           reason: err.message,
-          details: yaml.dump({
+          details: JSON.stringify({
             payload: task.payload,
             stack: err.stack
           })
@@ -75,7 +74,7 @@ var Worker = function(fn) {
 
       return swf.respondActivityTaskCompleted({
         taskToken: task.taskToken,
-        result: yaml.dump(result)
+        result: JSON.stringify(result)
       }, function(err, data) {
         if (err) {
           console.warn(err.stack);
@@ -121,20 +120,24 @@ module.exports = function(options, fn) {
         return next();
       }
 
-      var task = {
-        domain: options.domain,
-        taskList: options.taskList,
-        taskToken: data.taskToken,
-        activityId: data.activityId,
-        startedEventId: data.startedEventId,
-        workflowExecution: data.workflowExecution,
-        payload: {
-          activityType: data.activityType,
-          input: yaml.safeLoad(data.input)
-        }
-      };
+      try {
+        var task = {
+          domain: options.domain,
+          taskList: options.taskList,
+          taskToken: data.taskToken,
+          activityId: data.activityId,
+          startedEventId: data.startedEventId,
+          workflowExecution: data.workflowExecution,
+          payload: {
+            activityType: data.activityType,
+            input: JSON.parse(data.input)
+          }
+        };
 
-      push(null, task);
+        push(null, task);
+      } catch(err) {
+        console.warn(data.input, err);
+      }
 
       return next();
     });
