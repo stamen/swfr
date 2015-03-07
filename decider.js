@@ -400,6 +400,7 @@ module.exports = function(options, fn) {
 
     // TODO get events from an LRU cache (which means requesting events in
     // reverse order)
+    // in batches of 100 (or whatever the page size is set to)
     var poll = swf.pollForDecisionTask({
       domain: options.domain,
       taskList: {
