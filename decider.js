@@ -233,10 +233,10 @@ DecisionContext.prototype.activity = function() {
       // we're definitely not replaying now
       context.replaying = false;
 
-      // do the thing
-      // console.log("Calling %s[%s](%s)", name, version, args);
-
-      var attrs = {
+      // hash the attributes to give us predictable activity ids
+      // NOTE: also prevents duplicate activities
+      var hashStream = crypto.createHash("sha512"),
+          attrs = {
             activityType: {
               name: name,
               version: version
@@ -251,10 +251,7 @@ DecisionContext.prototype.activity = function() {
             taskList: {
               name: "splitmerge_activity_tasklist" // TODO
             }
-          },
-          // hash the attributes to give us predictable activity ids
-          // NOTE: also prevents duplicate activities
-          hashStream = crypto.createHash("sha512");
+          };
 
       hashStream.end(JSON.stringify(attrs));
       attrs.activityId = hashStream.read().toString("hex");

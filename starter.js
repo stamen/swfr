@@ -10,26 +10,25 @@ AWS.config.update({
 
 var swf = new AWS.SWF();
 
-var attrs = {
-  domain: "SplitMerge",
-  workflowType: {
-    name: "SplitMergeWorkflow.start",
-    version: "1.5"
-  },
-  taskList: {
-    name: "splitmerge_workflow_tasklist"
-  },
-  input: JSON.stringify("input"),
-  executionStartToCloseTimeout: "120", // 2 minutes
-  taskStartToCloseTimeout: "30", // 30 seconds
-  childPolicy: "TERMINATE"
-  // TODO tagList
-  // TODO taskPriority
-};
-
 // hash the attributes to give us predictable activity ids
 // NOTE: also prevents duplicate activities
-var hashStream = crypto.createHash("sha512");
+var hashStream = crypto.createHash("sha512"),
+    attrs = {
+    domain: "SplitMerge",
+    workflowType: {
+      name: "SplitMergeWorkflow.start",
+      version: "1.5"
+    },
+    taskList: {
+      name: "splitmerge_workflow_tasklist"
+    },
+    input: JSON.stringify("input"),
+    executionStartToCloseTimeout: "120", // 2 minutes
+    taskStartToCloseTimeout: "30", // 30 seconds
+    childPolicy: "TERMINATE"
+    // TODO tagList
+    // TODO taskPriority
+  };
 
 hashStream.end(JSON.stringify(attrs));
 attrs.workflowId = hashStream.read().toString("hex");
