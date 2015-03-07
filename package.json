@@ -11,8 +11,6 @@
   "dependencies": {
     "aws-sdk": "^2.1.14",
     "bluebird": "^2.9.13",
-    "bluebird-retry": "^0.3.1",
-    "highland": "^2.4.0",
-    "js-yaml": "^3.2.7"
+    "highland": "^2.4.0"
   }
 }
