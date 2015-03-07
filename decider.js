@@ -30,8 +30,9 @@ var DecisionContext = function(task) {
   this.task = task;
   // we're replaying at first if this isn't the first time through the workflow
   this.replaying = this.task.previousStartedEventId !== 0;
+
+  // information about activities (and pointers to them)
   this.activities = {};
-  this.rescheduled = {};
 
   this.task.events.forEach(function(event) {
     var eventId = event.eventId,
@@ -39,17 +40,7 @@ var DecisionContext = function(task) {
 
     switch (event.eventType) {
     case "ActivityTaskScheduled":
-      // activities appear to be scheduled in order even if they're not
-      // necessarily executed in order
       attrs = event.activityTaskScheduledEventAttributes;
-
-      // console.log("activity task scheduled: %j", attrs);
-
-      this.activities[eventId] = {
-        attributes: attrs,
-        status: "scheduled",
-        lastEventId: eventId
-      };
 
       // index by activity id
       var key = JSON.stringify({
@@ -58,6 +49,26 @@ var DecisionContext = function(task) {
         input: attrs.input
       });
 
+      var attempts = 0;
+
+      if (this.activities[key]) {
+        // this is a retry; copy attempts from the previous one
+        attempts = this.activities[this.activities[key]].attempts;
+
+        // clear out the previous attempt
+        delete this.activities[this.activities[key]];
+      }
+
+      // create a new activity entry
+      this.activities[eventId] = {
+        attributes: attrs,
+        status: "scheduled",
+        lastEventId: eventId,
+        key: key,
+        attempts: attempts
+      };
+
+      // update the reference
       this.activities[key] = eventId;
 
       break;
@@ -69,6 +80,7 @@ var DecisionContext = function(task) {
 
       this.activities[eventId].status = "started";
       this.activities[eventId].lastEventId = event.eventId;
+      this.activities[eventId].attempts++;
 
       break;
 
@@ -122,13 +134,10 @@ var DecisionContext = function(task) {
 
     case "ScheduleActivityTaskFailed":
       // this occurs when re-using ids (or other reasons?)
-      // since the desired task doesn't show up in the history, it will be
-      // rescheduled on the next run-through
 
       attrs = event.scheduleActivityTaskFailedEventAttributes;
 
-      // mark this activity as rescheduled
-      this.rescheduled[attrs.activityId] = eventId;
+      // TODO look up activity/event id by activityId
 
       this.activities[eventId] = {
         attributes: attrs,
@@ -137,7 +146,8 @@ var DecisionContext = function(task) {
         error: new Error(attrs.cause)
       };
 
-      console.warn("Schedule activity task failed:", attrs);
+      console.warn("Schedule activity task failed:", event);
+      // console.warn("Schedule activity task failed:", attrs);
 
       break;
 
@@ -145,6 +155,7 @@ var DecisionContext = function(task) {
     case "DecisionTaskScheduled":
     case "DecisionTaskStarted":
     case "DecisionTaskCompleted":
+    case "DecisionTaskTimedOut":
       // noop
 
       break;
@@ -165,24 +176,21 @@ var DecisionContext = function(task) {
 DecisionContext.prototype.activity = function() {
   var options = {
     // defaults go here
+    retries: 1
   };
 
   var runActivity = function(name, version) {
     var args = Array.prototype.slice.call(arguments, 2),
-        context = this;
-
-    // console.log("activity: %s (%s):", name, version, args);
-    // console.log("options:", options);
+        context = this,
+        key = JSON.stringify({
+          name: name,
+          version: version,
+          input: JSON.stringify(args)
+        });
 
     args = JSON.stringify(args);
 
     return new Promise(function(resolve, reject) {
-      var key = JSON.stringify({
-        name: name,
-        version: version,
-        input: args
-      });
-
       var eventId = context.activities[key];
 
       if (context.activities[eventId]) {
@@ -192,36 +200,33 @@ DecisionContext.prototype.activity = function() {
         // attempted the workflow
         context.replaying = entry.lastEventId <= context.task.previousStartedEventId;
 
-        if (entry.attributes.activityType.name === name &&
-            entry.attributes.activityType.version === version &&
-            entry.attributes.input === args) {
+        switch (entry.status) {
+        case "completed":
+          return resolve(entry.result);
 
-          switch (entry.status) {
-          case "completed":
-            return resolve(entry.result);
-
-          case "failed":
-          case "timeout":
+        case "failed":
+        case "timeout":
+          if (entry.attempts >= options.retries) {
+            // out of retries
             return reject(entry.error);
-
-          case "scheduled":
-          case "started":
-            // cancel the workflow; we can't fulfill this promise on this run
-
-            return cancel(resolve);
-
-          case "schedule-failed":
-            // break out and attempt to schedule the task again
-            break;
-
-          default:
-            console.warn("Unsupported status:", entry.status);
-
-            return cancel(resolve);
           }
-        } else {
-          // TODO bubble this up to here (not the workflow)
-          return reject(new Error(util.format("Unexpected entry in history:", entry)));
+
+          break;
+
+        case "scheduled":
+        case "started":
+          // cancel the workflow; we can't fulfill this promise on this run
+
+          return cancel(resolve);
+
+        case "schedule-failed":
+          // break out and attempt to schedule the task again
+          break;
+
+        default:
+          console.warn("Unsupported status:", entry.status);
+
+          return cancel(resolve);
         }
       }
 
@@ -313,11 +318,20 @@ var DecisionWorker = function(fn) {
       .resolve()
       .bind(context)
       .then(fn.bind(context, task.payload)) // partially apply the worker fn w/ the payload
-      .catch(Promise.CancellationError, function(err) {
-        // console.warn("Chain interrupted:", err);
+      .catch(Promise.CancellationError, function() {
+        // workflow couldn't run to completion; this is not an error
       })
       .catch(function(err) {
-        console.warn("Error in workflow:", err.stack);
+        this.decisions.push({
+          decisionType: "FailWorkflowExecution",
+          failWorkflowExecutionDecisionAttributes: {
+            details: JSON.stringify({
+              payload: err.payload,
+              stack: err.stack
+            }),
+            reason: err.message
+          }
+        });
       })
       .finally(function() {
         // console.log("decisions:", this.decisions);

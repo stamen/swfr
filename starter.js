@@ -20,8 +20,8 @@ swf.startWorkflowExecution({
   },
   input: JSON.stringify("input"),
   executionStartToCloseTimeout: '120', // 2 minutes
-  taskStartToCloseTimeout: '30' // 30 seconds
-  // TODO childPolicy
+  taskStartToCloseTimeout: '30', // 30 seconds
+  childPolicy: "TERMINATE"
   // TODO tagList
   // TODO taskPriority
 }, function(err, data) {

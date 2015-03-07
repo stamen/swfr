@@ -23,34 +23,22 @@ var worker = decider({
   // this point
   this.log("Running workflow");
 
+  // TODO stick map in the context to manage concurrency?
   var calls = Promise.map([0, 1, 2, 3, 4], function(i) {
     context.status = util.format("SplitMergeActivity.noop@1.4:", i);
 
     return context.activity({
+      retries: 5
       // TODO options (heartbeatTimeout, etc.)
     })("SplitMergeActivity.noop", "1.4", i);
-
-    // TODO support retries
-    // // need to bind arguments to fn, as retry doesn't accept them
-    // return retry(call.bind(null, "echo", i), {
-    //   interval: 1, // this either running for playback or remotely, so waiting does nothing (0 leads to the default value)
-    //   max_tries: 5
-    // })
-    //   .catch(function(err) {
-    //     // unwrap cancellation errors and propagate them
-    //     if (err.failure && err.failure instanceof Promise.CancellationError) {
-    //       throw err.failure;
-    //     }
-    //
-    //     throw err;
-    //   });
   }, {
-    // concurrency: 2
+    concurrency: 2
   });
 
   return Promise.all(calls)
     .bind(context)
     .then(function(result) {
+      // TODO the runner thinks we're retrying at this point
       this.log("Output:", result);
 
       var sum = result.reduce(function(a, b) {
@@ -60,13 +48,13 @@ var worker = decider({
       this.log("Sum:", sum);
 
       this.status = "print sum";
-      return this.activity("SplitMergeActivity.noop", "1.4", sum);
+      return this.activity({ retries: 5 })("SplitMergeActivity.noop", "1.4", sum);
     })
     .then(function(result) {
       this.log("Result:", result);
 
       this.status = "print done";
-      return this.activity("SplitMergeActivity.noop", "1.4", "done");
+      return this.activity({ retries: 5 })("SplitMergeActivity.noop", "1.4", "done");
     })
     .then(function() {
       this.log("done.");
