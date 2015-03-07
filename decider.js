@@ -369,10 +369,37 @@ module.exports = function(options, fn) {
 
   var worker = new EventEmitter();
 
+  var getEvents = function(events, nextPageToken, callback) {
+    if (!nextPageToken) {
+      return setImmediate(callback, null, events);
+    }
+
+    return swf.pollForDecisionTask({
+      domain: options.domain,
+      taskList: {
+        name: options.taskList
+      },
+      identity: util.format("swfr@%s:%d", os.hostname(), process.pid),
+      nextPageToken: nextPageToken
+    }, function(err, data) {
+      if (err) {
+        return callback(err);
+      }
+
+      if (data.nextPageToken) {
+        return getEvents(events.concat(data.events), data.nextPageToken, callback);
+      }
+
+      return callback(null, events.concat(data.events));
+    });
+  };
+
   var source = _(function(push, next) {
     // TODO note: activity types need to be registered in order for workflow
     // executions to not fail
 
+    // TODO get events from an LRU cache (which means requesting events in
+    // reverse order)
     var poll = swf.pollForDecisionTask({
       domain: options.domain,
       taskList: {
@@ -390,9 +417,19 @@ module.exports = function(options, fn) {
         return next();
       }
 
-      push(null, data);
+      return getEvents(data.events, data.nextPageToken, function(err, events) {
+        if (err) {
+          console.warn(err.stack);
 
-      return next();
+          return next();
+        }
+
+        data.events = events;
+
+        push(null, data);
+
+        return next();
+      });
     });
 
     // cancel requests when the stream ends so we're not hanging onto any
