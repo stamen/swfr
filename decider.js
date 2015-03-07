@@ -25,7 +25,7 @@ var cancel = function(resolve) {
   return promise.cancel();
 };
 
-var DecisionContext = function(task) {
+var DeciderContext = function(task) {
   this.decisions = [];
   this.task = task;
   // we're replaying at first if this isn't the first time through the workflow
@@ -173,7 +173,7 @@ var DecisionContext = function(task) {
   }.bind(this));
 };
 
-DecisionContext.prototype.activity = function() {
+DeciderContext.prototype.activity = function() {
   var options = {
     // defaults go here
     retries: 1
@@ -280,7 +280,7 @@ DecisionContext.prototype.activity = function() {
   return runActivity.apply(this, arguments);
 };
 
-DecisionContext.prototype.complete = function(result) {
+DeciderContext.prototype.complete = function(result) {
   // console.log("Completion requested.");
   this.decisions.push({
     decisionType: "CompleteWorkflowExecution",
@@ -290,14 +290,14 @@ DecisionContext.prototype.complete = function(result) {
   });
 };
 
-DecisionContext.prototype.log = function() {
+DeciderContext.prototype.log = function() {
   // only do this if we're not replaying
   if (!this.replaying) {
     console.log.apply(null, arguments);
   }
 };
 
-var DecisionWorker = function(fn) {
+var Decider = function(fn) {
   stream.Writable.call(this, {
     objectMode: true,
     highWaterMark: 1 // limit the number of buffered tasks
@@ -305,7 +305,7 @@ var DecisionWorker = function(fn) {
 
   this._write = function(task, encoding, callback) {
     // pass the input to the function and provide the rest as the context
-    var context = new DecisionContext(task),
+    var context = new DeciderContext(task),
         input;
 
     assert.equal("WorkflowExecutionStarted",
@@ -356,7 +356,7 @@ var DecisionWorker = function(fn) {
   };
 };
 
-util.inherits(DecisionWorker, stream.Writable);
+util.inherits(Decider, stream.Writable);
 
 /**
  * Available options:
@@ -408,7 +408,7 @@ module.exports = function(options, fn) {
   });
 
   if (fn) {
-    source.pipe(new DecisionWorker(fn));
+    source.pipe(new Decider(fn));
 
     worker.cancel = function() {
       source.destroy();
