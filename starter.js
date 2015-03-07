@@ -1,5 +1,7 @@
 "use strict";
 
+var crypto = require("crypto");
+
 var AWS = require("aws-sdk");
 
 AWS.config.update({
@@ -8,9 +10,8 @@ AWS.config.update({
 
 var swf = new AWS.SWF();
 
-swf.startWorkflowExecution({
+var attrs = {
   domain: "SplitMerge",
-  workflowId: "workflowId", // TODO a UUID
   workflowType: {
     name: "SplitMergeWorkflow.start",
     version: "1.5"
@@ -19,17 +20,26 @@ swf.startWorkflowExecution({
     name: "splitmerge_workflow_tasklist"
   },
   input: JSON.stringify("input"),
-  executionStartToCloseTimeout: '120', // 2 minutes
-  taskStartToCloseTimeout: '30', // 30 seconds
+  executionStartToCloseTimeout: "120", // 2 minutes
+  taskStartToCloseTimeout: "30", // 30 seconds
   childPolicy: "TERMINATE"
   // TODO tagList
   // TODO taskPriority
-}, function(err, data) {
+};
+
+// hash the attributes to give us predictable activity ids
+// NOTE: also prevents duplicate activities
+var hashStream = crypto.createHash("sha512");
+
+hashStream.end(JSON.stringify(attrs));
+attrs.workflowId = hashStream.read().toString("hex");
+
+swf.startWorkflowExecution(attrs, function(err, data) {
   if (err) {
     throw err;
   }
 
-  console.log("domain:", "SplitMerge");
-  console.log("workflowId:", "workflowId");
+  console.log("domain:", attrs.domain);
+  console.log("workflowId:", attrs.workflowId);
   console.log("Response:", data);
 });

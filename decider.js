@@ -76,8 +76,6 @@ var DecisionContext = function(task) {
     case "ActivityTaskStarted":
       eventId = event.activityTaskStartedEventAttributes.scheduledEventId;
 
-      // console.log("activity task started: %j", event);
-
       this.activities[eventId].status = "started";
       this.activities[eventId].lastEventId = event.eventId;
       this.activities[eventId].attempts++;
@@ -173,8 +171,6 @@ var DecisionContext = function(task) {
     // "RequestCancelActivityTaskFailed"
     }
   }.bind(this));
-
-  // console.log("activities:", this.activities);
 };
 
 DecisionContext.prototype.activity = function() {
@@ -311,17 +307,25 @@ var DecisionWorker = function(fn) {
   });
 
   this._write = function(task, encoding, callback) {
-    // console.log("Task:", task);
-    // pass the activity type + input to the function and provide the rest as
-    // the context
-    var context = new DecisionContext(task);
+    // pass the input to the function and provide the rest as the context
+    var context = new DecisionContext(task),
+        input;
 
+    assert.equal("WorkflowExecutionStarted",
+                 task.events[0].eventType,
+                 "Expected first event to be of type WorkflowExecutionStarted");
+
+    try {
+      input = JSON.parse(task.events[0].workflowExecutionStartedEventAttributes.input);
+    } catch (err) {
+      console.warn("Malformed input:", input, err);
+    }
     // console.log("Attempting to start.");
 
     Promise
       .resolve()
       .bind(context)
-      .then(fn.bind(context, task.payload)) // partially apply the worker fn w/ the payload
+      .then(fn.bind(context, input)) // partially apply the worker fn w/ the input
       .catch(Promise.CancellationError, function() {
         // workflow couldn't run to completion; this is not an error
       })
@@ -338,10 +342,7 @@ var DecisionWorker = function(fn) {
         });
       })
       .finally(function() {
-        // console.log("decisions:", this.decisions);
-        // console.log("done (with this attempt).");
-
-        // send decisions
+        // we're done deciding on next actions; report back
 
         return swf.respondDecisionTaskCompleted({
           taskToken: task.taskToken,
@@ -392,27 +393,7 @@ module.exports = function(options, fn) {
         return next();
       }
 
-      try {
-        // console.log("Response: %j", data);
-
-        // var task = {
-        //   domain: options.domain,
-        //   taskList: options.taskList,
-        //   eventId: data.eventId,
-        //   taskToken: data.taskToken,
-        //   previousStartedEventId: data.previousStartedEventId,
-        //   startedEventId: data.startedEventId,
-        //   workflowExecution: data.workflowExecution,
-        //   nextPageToken: data.nextPageToken,
-        //   payload: {
-        //     workflowType: data.workflowType
-        //   }
-        // };
-
-        push(null, data);
-      } catch (err) {
-        console.warn(data.input, err);
-      }
+      push(null, data);
 
       return next();
     });
