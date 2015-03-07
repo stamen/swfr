@@ -137,7 +137,7 @@ var DecisionContext = function(task) {
 
       attrs = event.scheduleActivityTaskFailedEventAttributes;
 
-      // TODO look up activity/event id by activityId
+      // TODO does this still work?
 
       this.activities[eventId] = {
         attributes: attrs,
@@ -147,8 +147,12 @@ var DecisionContext = function(task) {
       };
 
       console.warn("Schedule activity task failed:", event);
-      // console.warn("Schedule activity task failed:", attrs);
 
+      break;
+
+    case "FailWorkflowExecutionFailed":
+      // TODO figure out how to handle this
+      console.log("%j", event);
       break;
 
     case "WorkflowExecutionStarted":
