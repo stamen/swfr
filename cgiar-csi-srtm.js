@@ -189,7 +189,7 @@ var worker = decider({
     .then(function(cells) {
       // TODO warn if JSONified input >= 4k
       // if that's the case, compose list + VRT in a single activity
-      this.log("Generated %d cells for zoom %d:", cells.length, targetZoom);
+      this.log("Generated %d cells for zoom %d.", cells.length, targetZoom);
 
       // generate VRT from results
       // TODO combine list + VRT step into a single activity
