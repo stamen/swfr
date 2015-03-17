@@ -12,9 +12,9 @@ var activityHandler = function(i) {
 
     switch (task.activityType.name) {
     case "SplitMergeActivity.noop":
-      if (Math.random() < 0.5) {
-        return callback(new Error("Synthetic error for input: " + task.input[0]));
-      }
+      // if (Math.random() < 0.5) {
+      //   return callback(new Error("Synthetic error for input: " + task.input[0]));
+      // }
 
       return callback(null, task.input[0]);
     case "SplitMergeActivity.report_result":

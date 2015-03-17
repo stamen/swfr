@@ -18,8 +18,16 @@ var worker = decider({
   this.log("Running workflow");
   this.log("Input:", input);
 
+  var values = [];
+
+  for (var x = 0; x < 1100; x++) {
+    values.push(x);
+  }
+
   // TODO stick map in the context to manage concurrency?
-  var calls = Promise.map([0, 1, 2, 3, 4], function(i) {
+  // or just reiterate the fact that a workflow can have no more than 100
+  // activity tasks active at a time?
+  var calls = Promise.map(values, function(i) {
     context.status = util.format("SplitMergeActivity.noop@1.4:", i);
 
     return context.activity({
@@ -27,7 +35,7 @@ var worker = decider({
       // TODO options (heartbeatTimeout, etc.)
     })("SplitMergeActivity.noop", "1.4", i);
   }, {
-    concurrency: 2
+    concurrency: 100
   });
 
   return Promise.all(calls)
@@ -35,6 +43,11 @@ var worker = decider({
     .then(function(result) {
       this.log("Output:", result);
 
+      // TODO cache the result of this function
+      // TODO checkpoints--save input to checkpoint and skip everything before
+      // it (saves on pagination, saves on computation)
+      // checkpoints need to wrap execution up to a certain point so that it
+      // can be bypassed
       var sum = result.reduce(function(a, b) {
         return a + b;
       }, 0);

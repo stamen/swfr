@@ -23,7 +23,7 @@ var hashStream = crypto.createHash("sha512"),
       name: "splitmerge_workflow_tasklist"
     },
     input: JSON.stringify("input"),
-    executionStartToCloseTimeout: "120", // 2 minutes
+    executionStartToCloseTimeout: "600", // 10 minutes
     taskStartToCloseTimeout: "30", // 30 seconds
     childPolicy: "TERMINATE"
     // TODO tagList
