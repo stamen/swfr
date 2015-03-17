@@ -61,6 +61,7 @@ var worker = decider({
     })
     .then(function(keys) {
       // generate VRT from results
+      // TODO combine list + VRT step into a single activity
 
       var output = util.format("s3://%s/cgiar-csi-srtm-4326.vrt", bucket),
           files = keys.map(function(key) {
@@ -95,11 +96,13 @@ var worker = decider({
           targetResolution = circumference / widthPx,
           width = CELL_WIDTH * targetResolution,
           height = width,
+          // human-readable extent components
           left = extent[0][0],
           right = extent[1][0],
           bottom = extent[1][1],
           top = extent[0][1];
 
+      // chop the (overlapping) world into cells
       for (var yi = 0; yi < heightPx / CELL_HEIGHT; yi++) {
         var y = heightPx / CELL_HEIGHT - yi - 1, // convert from TMS to XYZ coords (top-left origin)
             y1 = Math.max(minY, (yi * height) - (circumference / 2) - (CELL_PADDING * targetResolution)),
@@ -139,6 +142,7 @@ var worker = decider({
     })
     .then(function(tiles) {
       // TODO warn if JSONified input >= 4k
+      // if that's the case, compose list + VRT in a single activity
       this.log("Generated tiles:", tiles);
     })
     .then(function() {
