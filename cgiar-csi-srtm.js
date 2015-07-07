@@ -200,6 +200,9 @@ var worker = decider({
 
               return this.activity("buildVRT", "1.0", files, output);
             });
+        })
+        .catch(function(err) {
+          console.error(err);
         });
     })
     .then(function() {
