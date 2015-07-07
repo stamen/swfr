@@ -4,7 +4,9 @@ var path = require("path"),
     url = require("url"),
     util = require("util");
 
-var mercator = new (require("sphericalmercator"))();
+var Bluebird = require("bluebird"),
+    mercator = new (require("sphericalmercator"))(),
+    range = require("range").range;
 
 var decider = require("./decider");
 
@@ -14,7 +16,10 @@ var CELL_PADDING = 1,
     // WGS 84 semi-major axis (m)
     SEMI_MAJOR_AXIS = 6378137;
 
+// TODO turn into an iterator to avoid excessive memory use at big zooms
 var tile = function(vrt, extent, targetZoom, targetPrefix) {
+  vrt = vrt.replace(/s3:\/\//, "/vsicurl/http://s3.amazonaws.com/");
+
   var cells = [],
       widthPx = Math.pow(2, targetZoom + 8), // world's width in px, assuming 256x256 tiles
       heightPx = widthPx,
@@ -76,6 +81,7 @@ var worker = decider({
       rawPrefix = "4326/",
       webPrefix = "3857/";
 
+  // TODO run reprojection separately
   return chain
     .then(function() {
       // list files in bucket
@@ -124,86 +130,71 @@ var worker = decider({
       return this.activity("buildVRT", "1.0", files, output);
     })
     .then(function(vrt) {
-      // get extent
+      // build overviews
+      var initialZoom = Math.floor(targetZoom / 2) * 2;
 
-      return this.activity("getExtent", "1.0", vrt);
-    })
-    .then(function(extent) {
-      // create cells at nearest integral zoom
+      return Bluebird
+        .resolve(range(initialZoom, -2, -2))
+        .bind(this)
+        // even zooms only
+        .each(function(zoom) {
+          if (zoom < initialZoom) {
+            // use the VRT for 2 zooms up
+            vrt = util.format("s3://cgiar-csi-srtm.openterrain.org/cgiar-csi-srtm-z%d.vrt", zoom + 2);
+          }
 
-      extent = extent.map(mercator.forward);
+          return Bluebird
+            .bind(this)
+            .then(function() {
+              return this.activity("getExtent", "1.0", vrt);
+            })
+            .then(function(extent) {
+              this.log("Creating cells for z%d using %s", zoom, vrt);
+              this.log("Extent:", extent);
 
-      // stash the extent for later use
-      this.userData.extent = extent;
+              // initial zoom reads from 4326
+              if (zoom === initialZoom) {
+                extent = extent.map(mercator.forward);
+              }
 
-      return tile("/vsicurl/http://s3.amazonaws.com/cgiar-csi-srtm.openterrain.org/cgiar-csi-srtm-4326.vrt", extent, targetZoom, util.format("s3://%s/%s", bucket, webPrefix));
-    })
-    .map(function(cell) {
-      return this.activity("resample", "1.0", cell.source, cell.target, cell.options);
-    }, {
-      concurrency: 5 // TODO if local, limit to os.cpus().length, otherwise 100 (or fewer)
-                     // TODO this could also be achieved by overwriting the
-                     // map function on the chain argument passed into the workflow
-    })
-    .filter(function(cell) {
-      return !!cell;
-    })
-    .then(function(cells) {
-      // TODO warn if JSONified input >= 4k
-      // if that's the case, compose list + VRT in a single activity
-      this.log("Generated %d cells for zoom %d.", cells.length, targetZoom);
+              // create cells at the current zoom
+              return tile(vrt,
+                          extent,
+                          zoom,
+                          util.format("s3://%s/%s", bucket, webPrefix));
+            })
+            .map(function(cell) {
+              this.log("Resampling %s", cell.target);
+              return this.activity("resample", "1.0", cell.source, cell.target, cell.options);
+            }, {
+              concurrency: 5 // TODO if local, limit to os.cpus().length, otherwise 100 (or fewer)
+                             // TODO this could also be achieved by overwriting the
+                             // map function on the chain argument passed into the workflow
+            })
+            .filter(function(cell) {
+              return !!cell;
+            })
+            .then(function(cells) {
+              // TODO deal if there are no cells
+              // TODO warn if JSONified input >= 4k
+              // if that's the case, compose list + VRT in a single activity
+              this.log("Generated %d cell(s) for zoom %d.", cells.length, zoom);
 
-      // generate VRT from results
-      // TODO combine list + VRT step into a single activity
+              // generate VRT from results
+              // TODO combine list + VRT step into a single activity
 
-      var output = util.format("s3://%s/cgiar-csi-srtm-z%d.vrt", bucket, targetZoom),
-          files = cells.map(function(cell) {
-            var uri = url.parse(cell);
+              var output = util.format("s3://%s/cgiar-csi-srtm-z%d.vrt", bucket, zoom),
+                  files = cells.map(function(cell) {
+                    var uri = url.parse(cell);
 
-            return util.format("/vsicurl/http://s3.amazonaws.com/%s%s", uri.hostname, uri.pathname);
-          });
+                    return util.format("/vsicurl/http://s3.amazonaws.com/%s%s",
+                                       uri.hostname,
+                                       uri.pathname);
+                  });
 
-      return this.activity("buildVRT", "1.0", files, output);
-    })
-    .then(function(sourceVRT) {
-      // create overview cells
-
-      var extent = this.userData.extent,
-          uri = url.parse(sourceVRT),
-          vrt = util.format("/vsicurl/http://s3.amazonaws.com/%s%s", uri.hostname, uri.pathname);
-
-      targetZoom -= 2;
-
-      return tile(vrt, extent, targetZoom, util.format("s3://%s/%s", bucket, webPrefix));
-    })
-    .map(function(cell) {
-      return this.activity("resample", "1.0", cell.source, cell.target, cell.options);
-    }, {
-      concurrency: 5 // TODO if local, limit to os.cpus().length, otherwise 100 (or fewer)
-                     // TODO this could also be achieved by overwriting the
-                     // map function on the chain argument passed into the workflow
-    })
-    .filter(function(cell) {
-      return !!cell;
-    })
-    .then(function(cells) {
-      // TODO warn if JSONified input >= 4k
-      // if that's the case, compose list + VRT in a single activity
-      this.log("Generated %d cells for zoom %d.", cells.length, targetZoom);
-
-      // generate VRT from results
-      // TODO combine list + VRT step into a single activity
-
-      var output = util.format("s3://%s/cgiar-csi-srtm-z%d.vrt", bucket, targetZoom),
-          files = cells.map(function(cell) {
-            var uri = url.parse(cell);
-
-            return util.format("/vsicurl/http://s3.amazonaws.com/%s%s", uri.hostname, uri.pathname);
-          });
-
-      this.log("files:", files);
-
-      return this.activity("buildVRT", "1.0", files, output);
+              return this.activity("buildVRT", "1.0", files, output);
+            });
+        });
     })
     .then(function() {
       this.complete();
