@@ -12,6 +12,7 @@ var _ = require("highland"),
 var Decider = require("./lib/decider"),
     SyncDecider = require("./lib/sync_decider");
 
+// TODO this overrides any file-based configuration that may have occurred
 AWS.config.update({
   region: process.env.AWS_DEFAULT_REGION || "us-east-1"
 });
