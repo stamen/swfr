@@ -19,6 +19,6 @@
     "holdtime": "^0.1.1",
     "s3-upload-stream": "^1.0.7",
     "sphericalmercator": "^1.0.3",
-    "tmp": "0.0.25"
+    "tmp": "0.0.26"
   }
 }
