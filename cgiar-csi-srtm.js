@@ -136,10 +136,11 @@ var worker = decider({
     })
     .then(function(vrt) {
       // build overviews
-      var initialZoom = Math.floor(targetZoom / 2) * 2;
+      var initialZoom = Math.floor(targetZoom / 2) * 2,
+          zoomOffset = Math.log(CELL_WIDTH / 256) / Math.log(2);
 
       return Bluebird
-        .resolve(range(initialZoom, -2, -2))
+        .resolve(range(initialZoom, zoomOffset - 2, -2))
         .bind(this)
         // even zooms only
         .each(function(zoom) {
