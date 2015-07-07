@@ -49,11 +49,16 @@ var tile = function(vrt, extent, targetZoom, targetPrefix) {
     for (var xi = 0; xi < widthPx / CELL_WIDTH; xi++) {
       var x1 = Math.max(minX, (xi * width) - (circumference / 2) - (CELL_PADDING * targetResolution)),
           x2 = Math.min(maxX, ((xi + 1) * width) - (circumference / 2) + (CELL_PADDING * targetResolution));
+
       // check intersection
-      if (((left <= x1 && x1 <= right) ||
-           (left <= x2 && x2 <= right)) &&
-          ((bottom <= y1 && y1 <= top) ||
-           (bottom <= y2 && y2 <= top))) {
+      if ((((left <= x1 && x1 <= right) ||
+           (left <= x2 && x2 <= right)) ||
+          (x1 <= left && left <= x2 &&
+           x1 <= right && right <= x2)) &&
+          (((bottom <= y1 && y1 <= top) ||
+           (bottom <= y2 && y2 <= top)) ||
+          (y1 <= bottom && bottom <= y2 &&
+           y1 <= top && top <= y2))) {
         // return a list and then run map in order to limit concurrency
         cells.push({
           source: vrt,
