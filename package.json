@@ -17,6 +17,7 @@
     "gdal": "^0.5.0",
     "highland": "^2.4.0",
     "holdtime": "^0.1.1",
+    "humanize-plus": "^1.5.0",
     "range": "0.0.3",
     "s3-upload-stream": "^1.0.7",
     "sphericalmercator": "^1.0.3",
