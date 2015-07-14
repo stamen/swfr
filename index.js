@@ -10,6 +10,8 @@ var assert = require("assert"),
 var _ = require("highland"),
     AWS = require("aws-sdk");
 
+var decider = require("./decider.js");
+
 var agent = new https.Agent({
   // Infinity just boosts the max value; in practice this will be no larger
   // than your configured concurrency (number of workers)
@@ -25,7 +27,7 @@ AWS.config.update({
 
 var swf = new AWS.SWF();
 
-var Worker = function(fn) {
+var ActivityWorker = function(fn) {
   stream.Writable.call(this, {
     objectMode: true,
     highWaterMark: 1 // limit the number of buffered tasks
@@ -86,14 +88,16 @@ var Worker = function(fn) {
   };
 };
 
-util.inherits(Worker, stream.Writable);
+util.inherits(ActivityWorker, stream.Writable);
+
+module.exports.decider = decider;
 
 /**
  * Available options:
  * * domain - Workflow domain (required)
  * * taskList - Task list (required)
  */
-module.exports = function(options, fn) {
+module.exports.activity = function(options, fn) {
   assert.ok(options.domain, "options.domain is required");
   assert.ok(options.taskList, "options.taskList is required");
 
@@ -155,7 +159,7 @@ module.exports = function(options, fn) {
   });
 
   if (fn) {
-    source.pipe(new Worker(fn));
+    source.pipe(new ActivityWorker(fn));
 
     worker.cancel = function() {
       source.destroy();
