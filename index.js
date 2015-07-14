@@ -27,7 +27,7 @@ AWS.config.update({
 
 var swf = new AWS.SWF();
 
-var WorkerWritable = function(fn) {
+var ActivityWorker = function(fn) {
   stream.Writable.call(this, {
     objectMode: true,
     highWaterMark: 1 // limit the number of buffered tasks
@@ -88,16 +88,16 @@ var WorkerWritable = function(fn) {
   };
 };
 
-util.inherits(WorkerWritable, stream.Writable);
+util.inherits(ActivityWorker, stream.Writable);
 
-module.exports.Decider = decider;
+module.exports.decider = decider;
 
 /**
  * Available options:
  * * domain - Workflow domain (required)
  * * taskList - Task list (required)
  */
-module.exports.Worker = function(options, fn) {
+module.exports.activity = function(options, fn) {
   assert.ok(options.domain, "options.domain is required");
   assert.ok(options.taskList, "options.taskList is required");
 
@@ -159,7 +159,7 @@ module.exports.Worker = function(options, fn) {
   });
 
   if (fn) {
-    source.pipe(new WorkerWritable(fn));
+    source.pipe(new ActivityWorker(fn));
 
     worker.cancel = function() {
       source.destroy();

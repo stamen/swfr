@@ -9,8 +9,8 @@ var assert = require("assert"),
 var _ = require("highland"),
     AWS = require("aws-sdk");
 
-var Decider = require("./lib/decider"),
-    SyncDecider = require("./lib/sync_decider");
+var DeciderWorker = require("./lib/decider"),
+    SyncDeciderWorker = require("./lib/sync_decider");
 
 // TODO this overrides any file-based configuration that may have occurred
 AWS.config.update({
@@ -33,7 +33,7 @@ module.exports = function(options, fn) {
       objectMode: true
     });
 
-    source.pipe(new SyncDecider(fn));
+    source.pipe(new SyncDeciderWorker(fn));
 
     worker.cancel = function() {
       source.end();
@@ -130,7 +130,7 @@ module.exports = function(options, fn) {
   });
 
   if (fn) {
-    source.pipe(new Decider(fn));
+    source.pipe(new DeciderWorker(fn));
 
     worker.cancel = function() {
       source.destroy();

@@ -4,7 +4,7 @@ var os = require("os");
 
 var async = require("async");
 
-var worker = require("./index").Worker;
+var activity = require("./index").activity;
 
 var activityHandler = function(i) {
   return function(task, callback) {
@@ -26,7 +26,7 @@ var activityHandler = function(i) {
 };
 
 async.times(os.cpus().length, function(i) {
-  return worker({
+  return activity({
     domain: "SplitMerge",
     taskList: "splitmerge_activity_tasklist"
   }, activityHandler(i));
