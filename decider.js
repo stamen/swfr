@@ -9,8 +9,8 @@ var assert = require("assert"),
 var _ = require("highland"),
     AWS = require("aws-sdk");
 
-var DeciderWorker = require("./lib/decider"),
-    SyncDeciderWorker = require("./lib/sync_decider");
+var DeciderWorker = require("./lib/DeciderWorker"),
+    SyncDeciderWorker = require("./lib/SyncDeciderWorker");
 
 // TODO this overrides any file-based configuration that may have occurred
 AWS.config.update({
