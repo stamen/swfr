@@ -12,9 +12,8 @@ var _ = require("highland"),
 var DeciderWorker = require("./lib/DeciderWorker"),
     SyncDeciderWorker = require("./lib/SyncDeciderWorker");
 
-// TODO this overrides any file-based configuration that may have occurred
 AWS.config.update({
-  region: process.env.AWS_DEFAULT_REGION || "us-east-1"
+  region: process.env.AWS_DEFAULT_REGION || AWS.config.region || "us-east-1"
 });
 
 var swf = new AWS.SWF();
