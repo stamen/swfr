@@ -10,7 +10,8 @@ var assert = require("assert"),
 var _ = require("highland"),
     AWS = require("aws-sdk");
 
-var decider = require("./decider.js");
+var decider = require("./decider"),
+    payloadPersister = require("./lib/payload-persister");
 
 var agent = new https.Agent({
   // Infinity just boosts the max value; in practice this will be no larger
@@ -47,22 +48,49 @@ var ActivityWorker = function(fn) {
     // send a heartbeat every 30s
     var extension = setInterval(heartbeat, 30e3);
 
-    // pass the activity type + input to the function and provide the rest as
-    // the context
-    return fn.call(task, task.payload, function(err, result) {
-      // cancel the reservation extension
-      clearInterval(extension);
-
+    // load payload from an external source if necessary
+    return payloadPersister.load(task.payload, function(err, payload) {
       if (err) {
-        console.log("Failed:", err);
+        // cancel the reservation extention
+        clearInterval(extension);
 
-        return swf.respondActivityTaskFailed({
+        console.warn(err.stack);
+        return callback();
+      }
+
+      // pass the activity type + input to the function and provide the rest as
+      // the context
+      return fn.call(task, task.payload, function(err, result) {
+        // cancel the reservation extension
+        clearInterval(extension);
+
+        if (err) {
+          console.log("Failed:", err);
+
+          return swf.respondActivityTaskFailed({
+            taskToken: task.taskToken,
+            reason: err.message,
+            details: JSON.stringify({
+              payload: task.payload,
+              stack: err.stack
+            })
+          }, function(err, data) {
+            if (err) {
+              console.warn(err.stack);
+            }
+
+            return callback();
+          });
+        }
+
+        // mark task as complete
+
+        // TODO if result > 32k, save to DynamoDB and replace it with a URI
+        // include a timestamp in the item
+
+        return swf.respondActivityTaskCompleted({
           taskToken: task.taskToken,
-          reason: err.message,
-          details: JSON.stringify({
-            payload: task.payload,
-            stack: err.stack
-          })
+          result: JSON.stringify(result)
         }, function(err, data) {
           if (err) {
             console.warn(err.stack);
@@ -70,19 +98,6 @@ var ActivityWorker = function(fn) {
 
           return callback();
         });
-      }
-
-      // mark task as complete
-
-      return swf.respondActivityTaskCompleted({
-        taskToken: task.taskToken,
-        result: JSON.stringify(result)
-      }, function(err, data) {
-        if (err) {
-          console.warn(err.stack);
-        }
-
-        return callback();
       });
     });
   };
