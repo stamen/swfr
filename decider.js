@@ -21,7 +21,7 @@ var swf = new AWS.SWF();
 /**
  * Available options:
  * * domain - Workflow domain (required)
- * * taskList - Task list (required)
+ * * taskList - Task list
  */
 // TODO Distributor
 module.exports = function(options, fn) {
@@ -48,7 +48,8 @@ module.exports = function(options, fn) {
   }
 
   assert.ok(options.domain, "options.domain is required");
-  assert.ok(options.taskList, "options.taskList is required");
+
+  options.taskList = options.taskList || "defaultTaskList";
 
   var worker = new EventEmitter();
 

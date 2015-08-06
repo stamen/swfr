@@ -110,11 +110,12 @@ module.exports.decider = decider;
 /**
  * Available options:
  * * domain - Workflow domain (required)
- * * taskList - Task list (required)
+ * * taskList - Task list
  */
 module.exports.activity = function(options, fn) {
   assert.ok(options.domain, "options.domain is required");
-  assert.ok(options.taskList, "options.taskList is required");
+
+  options.taskList = options.taskList || "defaultTaskList";
 
   var worker = new EventEmitter();
 
