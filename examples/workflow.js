@@ -8,7 +8,7 @@ var env = require("require-env");
 var decider = require("../decider");
 
 var ACTIVITY_NAME = "noop",
-    ACTIVITY_VERSION = "1.4";
+    ACTIVITY_VERSION = "1.0";
 
 console.log("swfr@%s:%d", os.hostname(), process.pid);
 
