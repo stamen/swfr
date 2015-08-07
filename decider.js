@@ -9,8 +9,8 @@ var assert = require("assert"),
 var _ = require("highland"),
     AWS = require("aws-sdk");
 
-var DeciderWorker = require("./lib/DeciderWorker"),
-    SyncDeciderWorker = require("./lib/SyncDeciderWorker");
+var DeciderWorker = require("./lib/decider-worker"),
+    SyncDeciderWorker = require("./lib/sync-decider-worker");
 
 AWS.config.update({
   region: process.env.AWS_DEFAULT_REGION || AWS.config.region || "us-east-1"
@@ -21,7 +21,7 @@ var swf = new AWS.SWF();
 /**
  * Available options:
  * * domain - Workflow domain (required)
- * * taskList - Task list (required)
+ * * taskList - Task list
  */
 // TODO Distributor
 module.exports = function(options, fn) {
@@ -48,7 +48,8 @@ module.exports = function(options, fn) {
   }
 
   assert.ok(options.domain, "options.domain is required");
-  assert.ok(options.taskList, "options.taskList is required");
+
+  options.taskList = options.taskList || "defaultTaskList";
 
   var worker = new EventEmitter();
 

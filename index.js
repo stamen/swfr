@@ -8,9 +8,11 @@ var assert = require("assert"),
     util = require("util");
 
 var _ = require("highland"),
-    AWS = require("aws-sdk");
+    AWS = require("aws-sdk"),
+    clone = require("clone");
 
-var decider = require("./decider.js");
+var decider = require("./decider"),
+    payloadPersister = require("./lib/payload-persister");
 
 var agent = new https.Agent({
   // Infinity just boosts the max value; in practice this will be no larger
@@ -34,7 +36,8 @@ var ActivityWorker = function(fn) {
   });
 
   this._write = function(task, encoding, callback) {
-    var heartbeat = function() {
+    var payload = clone(task.payload),
+        heartbeat = function() {
           return swf.recordActivityTaskHeartbeat({
             taskToken: task.taskToken
           }, function(err, data) {
@@ -47,42 +50,62 @@ var ActivityWorker = function(fn) {
     // send a heartbeat every 30s
     var extension = setInterval(heartbeat, 30e3);
 
-    // pass the activity type + input to the function and provide the rest as
-    // the context
-    return fn.call(task, task.payload, function(err, result) {
-      // cancel the reservation extension
-      clearInterval(extension);
-
+    // load payload from an external source if necessary
+    return payloadPersister.load(task.payload.input, function(err, input) {
       if (err) {
-        console.log("Failed:", err);
+        // cancel the reservation extention
+        clearInterval(extension);
 
-        return swf.respondActivityTaskFailed({
-          taskToken: task.taskToken,
-          reason: err.message,
-          details: JSON.stringify({
-            payload: task.payload,
-            stack: err.stack
-          })
-        }, function(err, data) {
-          if (err) {
-            console.warn(err.stack);
-          }
-
-          return callback();
-        });
+        console.warn(err.stack);
+        return callback();
       }
 
-      // mark task as complete
+      payload.input = input;
 
-      return swf.respondActivityTaskCompleted({
-        taskToken: task.taskToken,
-        result: JSON.stringify(result)
-      }, function(err, data) {
+      // pass the activity type + input to the function and provide the rest as
+      // the context
+      return fn.call(task, payload, function(err, result) {
+        // cancel the reservation extension
+        clearInterval(extension);
+
         if (err) {
-          console.warn(err.stack);
+          console.log("Failed:", err);
+
+          return swf.respondActivityTaskFailed({
+            taskToken: task.taskToken,
+            reason: err.message,
+            details: JSON.stringify({
+              payload: task.payload,
+              stack: err.stack
+            })
+          }, function(err, data) {
+            if (err) {
+              console.warn(err.stack);
+            }
+
+            return callback();
+          });
         }
 
-        return callback();
+        // mark task as complete
+
+        return payloadPersister.save(task.taskToken, result, function(err, result) {
+          if (err) {
+            console.warn(err.stack);
+            return callback();
+          }
+
+          return swf.respondActivityTaskCompleted({
+            taskToken: task.taskToken,
+            result: JSON.stringify(result)
+          }, function(err, data) {
+            if (err) {
+              console.warn(err.stack);
+            }
+
+            return callback();
+          });
+        });
       });
     });
   };
@@ -95,11 +118,12 @@ module.exports.decider = decider;
 /**
  * Available options:
  * * domain - Workflow domain (required)
- * * taskList - Task list (required)
+ * * taskList - Task list
  */
 module.exports.activity = function(options, fn) {
   assert.ok(options.domain, "options.domain is required");
-  assert.ok(options.taskList, "options.taskList is required");
+
+  options.taskList = options.taskList || "defaultTaskList";
 
   var worker = new EventEmitter();
 
@@ -134,13 +158,13 @@ module.exports.activity = function(options, fn) {
           workflowExecution: data.workflowExecution,
           payload: {
             activityType: data.activityType,
-            input: JSON.parse(data.input)
+            input: JSON.parse(data.input).args
           }
         };
 
         push(null, task);
       } catch(err) {
-        console.warn(data.input, err);
+        console.warn("Error parsing input:", data.input, err.stack);
       }
 
       return next();
