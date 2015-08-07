@@ -22,7 +22,7 @@ AWS.config.update({
   httpOptions: {
     agent: agent
   },
-  region: process.env.AWS_DEFAULT_REGION || "us-east-1"
+  region: process.env.AWS_DEFAULT_REGION || AWS.config.region || "us-east-1"
 });
 
 var swf = new AWS.SWF();
