@@ -8,7 +8,8 @@ var assert = require("assert"),
     util = require("util");
 
 var _ = require("highland"),
-    AWS = require("aws-sdk");
+    AWS = require("aws-sdk"),
+    clone = require("clone");
 
 var decider = require("./decider"),
     payloadPersister = require("./lib/payload-persister");
@@ -35,7 +36,8 @@ var ActivityWorker = function(fn) {
   });
 
   this._write = function(task, encoding, callback) {
-    var heartbeat = function() {
+    var payload = clone(task.payload),
+        heartbeat = function() {
           return swf.recordActivityTaskHeartbeat({
             taskToken: task.taskToken
           }, function(err, data) {
@@ -49,7 +51,7 @@ var ActivityWorker = function(fn) {
     var extension = setInterval(heartbeat, 30e3);
 
     // load payload from an external source if necessary
-    return payloadPersister.load(task.payload, function(err, payload) {
+    return payloadPersister.load(task.payload.input, function(err, input) {
       if (err) {
         // cancel the reservation extention
         clearInterval(extension);
@@ -58,9 +60,11 @@ var ActivityWorker = function(fn) {
         return callback();
       }
 
+      payload.input = input;
+
       // pass the activity type + input to the function and provide the rest as
       // the context
-      return fn.call(task, task.payload, function(err, result) {
+      return fn.call(task, payload, function(err, result) {
         // cancel the reservation extension
         clearInterval(extension);
 
@@ -85,18 +89,22 @@ var ActivityWorker = function(fn) {
 
         // mark task as complete
 
-        // TODO if result > 32k, save to DynamoDB and replace it with a URI
-        // include a timestamp in the item
-
-        return swf.respondActivityTaskCompleted({
-          taskToken: task.taskToken,
-          result: JSON.stringify(result)
-        }, function(err, data) {
+        return payloadPersister.save(task.taskToken, result, function(err, result) {
           if (err) {
             console.warn(err.stack);
+            return callback();
           }
 
-          return callback();
+          return swf.respondActivityTaskCompleted({
+            taskToken: task.taskToken,
+            result: JSON.stringify(result)
+          }, function(err, data) {
+            if (err) {
+              console.warn(err.stack);
+            }
+
+            return callback();
+          });
         });
       });
     });
@@ -150,13 +158,13 @@ module.exports.activity = function(options, fn) {
           workflowExecution: data.workflowExecution,
           payload: {
             activityType: data.activityType,
-            input: JSON.parse(data.input)
+            input: JSON.parse(data.input).args
           }
         };
 
         push(null, task);
       } catch(err) {
-        console.warn(data.input, err);
+        console.warn("Error parsing input:", data.input, err.stack);
       }
 
       return next();
