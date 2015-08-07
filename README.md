@@ -50,6 +50,8 @@ swfr will use an out-of-band persister to store and transmit the payload. Right
 now, the only persister that has been implemented uses DynamoDB and increases
 the payload limit to 400kb.
 
+The DynamoDB table used must be configured using `AWS_DYNAMODB_TABLE`.
+
 ## Running
 
 ```bash

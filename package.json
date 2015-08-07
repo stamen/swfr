@@ -21,11 +21,9 @@
     "lru-cache": "^2.6.5",
     "mkdirp": "^0.5.1",
     "range": "0.0.3",
+    "require-env": "0.0.4",
     "s3-upload-stream": "^1.0.7",
     "sphericalmercator": "^1.0.3",
     "tmp": "0.0.26"
-  },
-  "devDependencies": {
-    "require-env": "0.0.4"
   }
 }
