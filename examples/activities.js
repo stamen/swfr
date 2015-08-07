@@ -12,13 +12,11 @@ var activityHandler = function(i) {
     console.log("worker #%d:", i, task);
 
     switch (task.activityType.name) {
-    case "noop":
+    case "echo":
       // if (Math.random() < 0.5) {
       //   return callback(new Error("Synthetic error for input: " + task.input[0]));
       // }
 
-      return callback(null, task.input[0]);
-    case "report_result":
       return callback(null, task.input[0]);
     default:
       return callback(new Error("Unsupported activity type: " + task.activityType.name));
