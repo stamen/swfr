@@ -9,8 +9,8 @@ var assert = require("assert"),
 var _ = require("highland"),
     AWS = require("aws-sdk");
 
-var DeciderWorker = require("./lib/DeciderWorker"),
-    SyncDeciderWorker = require("./lib/SyncDeciderWorker");
+var DeciderWorker = require("./lib/decider-worker"),
+    SyncDeciderWorker = require("./lib/sync-decider-worker");
 
 AWS.config.update({
   region: process.env.AWS_DEFAULT_REGION || AWS.config.region || "us-east-1"
