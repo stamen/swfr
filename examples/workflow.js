@@ -34,8 +34,6 @@ var worker = decider({
         retries: 5
         // TODO options (heartbeatTimeout, etc.)
       })(ACTIVITY_NAME, ACTIVITY_VERSION, i);
-    }, {
-      concurrency: 100 // TODO transparently manage concurrency?
     })
     .then(function(result) {
       this.log("Output:", result);
