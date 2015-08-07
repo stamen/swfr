@@ -23,5 +23,8 @@
     "s3-upload-stream": "^1.0.7",
     "sphericalmercator": "^1.0.3",
     "tmp": "0.0.26"
+  },
+  "devDependencies": {
+    "require-env": "0.0.4"
   }
 }
