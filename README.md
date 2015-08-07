@@ -89,7 +89,10 @@ aws swf register-activity-type --domain <domain> \
   --name <name> \
   --activity-version <version> \
   --default-task-list name=defaultTaskList \
-  --default-task-schedule-to-start-timeout 60
+  --default-task-start-to-close-timeout 60 \
+  --default-task-heartbeat-timeout 60 \
+  --default-task-schedule-to-start-timeout 60 \
+  --default-task-schedule-to-close-timeout 60
 
 # 7. check that the activity types exist
 
