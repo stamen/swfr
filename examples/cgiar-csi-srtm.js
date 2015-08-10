@@ -5,6 +5,7 @@ var path = require("path"),
     util = require("util");
 
 var Bluebird = require("bluebird"),
+    env = require("require-env"),
     mercator = new (require("sphericalmercator"))(),
     range = require("range").range;
 
@@ -77,8 +78,7 @@ var tile = function(vrt, extent, targetZoom, targetPrefix) {
 
 var worker = decider({
   sync: true,
-  domain: "SplitMerge",
-  taskList: "splitmerge_workflow_tasklist",
+  domain: env.require("AWS_SWF_DOMAIN"),
   activitiesFolder: path.join(__dirname, "activities")
 }, function(chain, input) {
   var bucket = input.bucket,

@@ -7,7 +7,7 @@ var env = require("require-env");
 
 var decider = require("../decider");
 
-var ACTIVITY_NAME = "noop",
+var ACTIVITY_NAME = "echo",
     ACTIVITY_VERSION = "1.0";
 
 console.log("swfr@%s:%d", os.hostname(), process.pid);
@@ -34,8 +34,6 @@ var worker = decider({
         retries: 5
         // TODO options (heartbeatTimeout, etc.)
       })(ACTIVITY_NAME, ACTIVITY_VERSION, i);
-    }, {
-      concurrency: 100 // TODO transparently manage concurrency?
     })
     .then(function(result) {
       this.log("Output:", result);

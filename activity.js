@@ -78,13 +78,13 @@ module.exports = function(options, fn) {
           workflowExecution: data.workflowExecution,
           payload: {
             activityType: data.activityType,
-            input: JSON.parse(data.input)
+            input: JSON.parse(data.input).args
           }
         };
 
         push(null, task);
       } catch(err) {
-        console.warn(data.input, err);
+        console.warn("Error parsing input:", data.input, err.stack);
       }
 
       return next();
