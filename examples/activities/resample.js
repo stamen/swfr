@@ -2,8 +2,7 @@
 
 var assert = require("assert");
 
-var clone = require("clone"),
-    gdal = require("gdal");
+var clone = require("clone");
 
 var output = require("../../lib/output"),
     shell = require("../../lib/shell");
@@ -79,9 +78,6 @@ module.exports = function resample(localInputPath, outputUri, options, callback)
 
       //   return done();
       // }
-
-      var ds = gdal.open(localOutputPath);
-
 
       // TODO: Resolve this
       // try {

@@ -9,7 +9,7 @@ var Bluebird = require("bluebird"),
     mercator = new (require("sphericalmercator"))(),
     range = require("range").range;
 
-var decider = require("./decider");
+var decider = require("../decider");
 
 var CELL_PADDING = 1,
     CELL_HEIGHT = 1024,
@@ -133,7 +133,7 @@ var worker = decider({
             return util.format("/vsicurl/http://s3.amazonaws.com/%s%s", uri.hostname, uri.pathname);
           });
 
-      return this.activity("buildVRT", "1.0", files, output);
+      return this.activity("buildVRT", "1.0", files, output, {});
     })
     .then(function(vrt) {
       // build overviews
@@ -199,7 +199,7 @@ var worker = decider({
                                        uri.pathname);
                   });
 
-              return this.activity("buildVRT", "1.0", files, output);
+              return this.activity("buildVRT", "1.0", files, output, {});
             });
         })
         .catch(function(err) {
