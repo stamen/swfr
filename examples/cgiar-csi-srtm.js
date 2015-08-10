@@ -78,7 +78,8 @@ var tile = function(vrt, extent, targetZoom, targetPrefix) {
 var worker = decider({
   sync: true,
   domain: "SplitMerge",
-  taskList: "splitmerge_workflow_tasklist"
+  taskList: "splitmerge_workflow_tasklist",
+  activitiesFolder: path.join(__dirname, "activities")
 }, function(chain, input) {
   var bucket = input.bucket,
       targetZoom = input.zoom, // nearest integral zoom (log_2(max(pixel size(m))))

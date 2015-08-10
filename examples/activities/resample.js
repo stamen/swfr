@@ -5,8 +5,8 @@ var assert = require("assert");
 var clone = require("clone"),
     gdal = require("gdal");
 
-var output = require("./output"),
-    shell = require("./shell");
+var output = require("../../lib/output"),
+    shell = require("../../lib/shell");
 
 module.exports = function resample(localInputPath, outputUri, options, callback) {
   try {

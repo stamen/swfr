@@ -6,8 +6,8 @@ var fs = require('fs'),
 
 var tmp = require('tmp');
 
-var output = require("./output"),
-    shell = require("./shell");
+var output = require("../../lib/output"),
+    shell = require("../../lib/shell");
 
 module.exports = function buildVRT(files, outputUri, options, callback) {
   return output(outputUri, callback, function(err, localOutputPath, done) {

@@ -3,7 +3,7 @@
 var url = require("url"),
     util = require("util");
 
-var shell = require("./shell");
+var shell = require("../../lib/shell");
 
 /**
  * Fetch the pixel size for a raster.

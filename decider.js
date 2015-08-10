@@ -26,13 +26,15 @@ var swf = new AWS.SWF();
 // TODO Distributor
 module.exports = function(options, fn) {
   if (options.sync) {
+    assert.ok(options.activitiesFolder, "options.activitiesFolder is required");
+
     var worker = new EventEmitter();
 
     var source = new stream.PassThrough({
       objectMode: true
     });
 
-    source.pipe(new SyncDeciderWorker(fn));
+    source.pipe(new SyncDeciderWorker(fn, options.activitiesFolder));
 
     worker.cancel = function() {
       source.end();

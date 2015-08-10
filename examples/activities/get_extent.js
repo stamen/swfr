@@ -4,7 +4,7 @@ var debug = require("debug"),
     url = require("url"),
     util = require("util");
 
-var shell = require("./shell");
+var shell = require("../../lib/shell");
 
 var log = debug("swfr:shell");
 

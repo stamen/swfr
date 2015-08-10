@@ -4,8 +4,8 @@ var assert = require("assert");
 
 var clone = require("clone");
 
-var output = require("./output"),
-    shell = require("./shell");
+var output = require("../../lib/output"),
+    shell = require("../../lib/shell");
 
 module.exports = function reproject(localInputPath, outputUri, options, callback) {
   try {
