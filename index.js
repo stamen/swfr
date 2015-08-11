@@ -1,7 +1,7 @@
 "use strict";
 
-var activity = require("./activity"),
-    decider = require("./decider"),
+var activity = require("./lib/activity"),
+    decider = require("./lib/decider"),
     output = require("./lib/output"),
     shell = require("./lib/shell");
 

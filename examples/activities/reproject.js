@@ -28,7 +28,7 @@ module.exports = function reproject(localInputPath, outputUri, options, callback
       "-r", "bilinear"
     ];
 
-    if(!options.nocompression) {
+    if (!options.nocompression) {
       args = args.concat([
         "-co", "compress=lzw",
         "-co", "predictor=2",

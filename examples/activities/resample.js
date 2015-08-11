@@ -11,8 +11,6 @@ module.exports = function resample(localInputPath, outputUri, options, callback)
   try {
     assert.ok(Array.isArray(options.targetExtent), "resample: targetExtent must be an array");
     assert.equal(4, options.targetExtent.length, "resample: targetExtent must be an array of 4 elements");
-    assert.ok(Array.isArray(options.targetResolution), "resample: targetResolution must be an array");
-    assert.equal(2, options.targetResolution.length, "resample: targetResolution must be an array of 2 elements");
   } catch (err) {
     return callback(err);
   }
@@ -25,11 +23,7 @@ module.exports = function resample(localInputPath, outputUri, options, callback)
     // TODO: Shouldn't assume target SRS.
     var args = [
       "-q",
-//      "-t_srs", "EPSG:3857",
       "-te", options.targetExtent[0], options.targetExtent[1], options.targetExtent[2], options.targetExtent[3],
-//      "-tr", options.targetResolution[0], options.targetResolution[1],
-//      "-tap",
-      "-ts", "256", "256",
       "-wm", 256, // allow GDAL to work with larger chunks (diminishing returns after 500MB, supposedly)
       "-wo", "NUM_THREADS=ALL_CPUS",
       "-multi",
@@ -37,9 +31,34 @@ module.exports = function resample(localInputPath, outputUri, options, callback)
       "-r", "bilinear"
     ];
 
-    if(!options.nocompression) {
+    if (options.targetSrs) {
       args = args.concat([
-//        "-co", "compress=deflate",
+        "-t_srs", options.targetSrs
+      ]);
+    }
+
+    if (options.targetResolution) {
+      assert.ok(Array.isArray(options.targetResolution), "resample: targetResolution must be an array");
+      assert.equal(2, options.targetResolution.length, "resample: targetResolution must be an array of 2 elements");
+      args = args.concat([
+        "-tr", options.targetResolution[0], options.targetResolution[1]
+      ]);
+    }
+    
+    if (options.targetSize) {
+      assert.ok(Array.isArray(options.targetSize), "resample: targetSize must be an array");
+      assert.equal(2, options.targetSize.length, "resample: targetSize must be an array of 2 elements");
+      args = args.concat([
+        "-ts", options.targetSize[0], options.targetSize[1]
+      ]);
+    }
+
+    if (options.alignPixels) {
+      args.push("-tap");
+    }
+
+    if (!options.nocompression) {
+      args = args.concat([
         "-co", "compress=lzw",
         "-co", "predictor=2"
       ]);
@@ -66,11 +85,16 @@ module.exports = function resample(localInputPath, outputUri, options, callback)
       timeout: 10 * 60e3 // 10 minutes
     }, function(err) {
       if (err) {
-        return done.apply(null, arguments);
+        return done(err);
       }
 
+      // TODO: We want a way to filter out tiles that are strictly filled with NoData.
+      // Below is an attempt at doing that, but it's very slow. What's a better way
+      // to do this?
+      //
+      // var ds = gdal.open(localOutputPath);
       // try {
-      //   gdal.open(localOutputPath).bands.get(1).getStatistics(false, true);
+      //  gdal.open(localOutputPath).bands.get(1).getStatistics(false, true);
       // } catch (err) {
       //   // likely "Failed to compute statistics, no valid pixels found in
       //   // sampling.", which means that it's all NODATA, and thus not worth
@@ -78,8 +102,6 @@ module.exports = function resample(localInputPath, outputUri, options, callback)
 
       //   return done();
       // }
-
-      // TODO: Resolve this
       // try {
       //   ds.bands.get(1).getStatistics(false, true);
       // } catch (err) {

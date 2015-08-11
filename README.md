@@ -31,12 +31,63 @@ This is an example decider:
 Activities represent discrete units of computation (or behavior). Given an
 input, they produce an output.
 
-This is an example activity:
+There are two ways you can handle activites inside an activity worker.
+One way is to pass in a function and manually handle the activities,
+as is shown in the `examples/activities.js` example worker.
+
+The second way is to write all of your activies in a folder, and then pass that directory
+into the activity worker. The activity worker will then pull an activity to
+execute from SWF, match it up to the activity in the provided activites folder,
+and execute that code.
+
+For instance, and activity worker script would look like this:
 
 ```javascript
+"use strict";
 
+var os = require("os");
+
+var activity = require("swfr").activity,
+    async = require("async"),
+    env = require("require-env");
+    
+async.times(os.cpus().length, function(i) {
+  return activity({
+    domain: env.require("AWS_SWF_DOMAIN"),
+    activitiesFolder: path.join(__dirname, "lib", "activities"),
+    workerId: i
+  });
+}, function(err, workers) {
+  if (err) {
+    throw err;
+  }
+
+  process.on("SIGTERM", function() {
+    return workers.forEach(function(w) {
+      return w.cancel();
+    });
+  });
+});
 ```
 
+In this case, our activites live inside the `lib/activites` folder that exists under
+the folder our activity worker is in. The above activity worker spins up a process that will
+poll SWF for activities for each CPU on the machine. Once an activity is pulled of the task list,
+swfr will match that activity by name and version to one in the `activityFolder` passed in.
+
+This is an example activity that you would place into the `activitiesFolder`:
+
+```javascript
+"use strict";
+
+module.exports = function echo(input, callback) {
+  return callback(null, input);
+};
+
+module.exports.version = "1.0";
+```
+
+The activities must be registered by name and version inside of SWF.
 The name of the activity is keyed off of the function name (meaning that it
 can't be an anonymous function). The activity version is keyed off of
 a `version` property present on the exported function object. These are used to
