@@ -4,8 +4,8 @@ var assert = require("assert");
 
 var clone = require("clone");
 
-var output = require("./output"),
-    shell = require("./shell");
+var output = require("../../lib/output"),
+    shell = require("../../lib/shell");
 
 module.exports = function reproject(localInputPath, outputUri, options, callback) {
   try {
@@ -25,10 +25,15 @@ module.exports = function reproject(localInputPath, outputUri, options, callback
       "-wo", "NUM_THREADS=ALL_CPUS",
       "-multi",
       "-co", "tiled=yes",
-      "-co", "compress=lzw",
-      "-co", "predictor=2",
       "-r", "bilinear"
     ];
+
+    if (!options.nocompression) {
+      args = args.concat([
+        "-co", "compress=lzw",
+        "-co", "predictor=2",
+      ]);
+    }
 
     if (options.overwrite) {
       args.push("-overwrite");

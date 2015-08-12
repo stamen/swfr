@@ -4,10 +4,11 @@ var debug = require("debug"),
     url = require("url"),
     util = require("util");
 
-var shell = require("./shell");
+var shell = require("../../lib/shell");
 
 var log = debug("swfr:shell");
 
+// Regex to extract coordinates.
 var COORDINATE_REGEX = /([\[\(])([^,]*),(.*?)([\]\)])/;
 
 /**
@@ -15,18 +16,15 @@ var COORDINATE_REGEX = /([\[\(])([^,]*),(.*?)([\]\)])/;
  *
  * @returns [upper left, lower right]
  */
-module.exports = function getExtent(uri, callback) {
+module.exports = function getExtent(uri, done) {
   var args = [
     "-nofl", // In case this is a VRT with too many files to be caught in stdout
     uri
   ];
 
-  // Regex to extract coordinates.
-
-
   return shell("gdalinfo", args, {}, function(err, stdout) {
     if (err) {
-      return callback(err);
+      return done.apply(null, arguments);
     }
 
     var extent = stdout.split("\n").filter(function(line) {
@@ -39,9 +37,9 @@ module.exports = function getExtent(uri, callback) {
 
       return [x, y];
     });
-    
+
     log("Got extent: %s", extent);
-    return callback(null, extent);
+    return done(null, extent);
   });
 };
 

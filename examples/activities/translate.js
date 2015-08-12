@@ -5,8 +5,8 @@ var assert = require("assert");
 var clone = require("clone"),
     gdal = require("gdal");
 
-var output = require("./output"),
-    shell = require("./shell");
+var output = require("../../lib/output"),
+    shell = require("../../lib/shell");
 
 module.exports = function translate(localInputPath, outputUri, options, callback) {
   return output(outputUri, callback, function(err, localOutputPath, done) {
@@ -26,7 +26,7 @@ module.exports = function translate(localInputPath, outputUri, options, callback
       }
     }
 
-    if (options.nodata) {
+    if ("nodata" in options) {
       args = args.concat(["-a_nodata", options.nodata]);
     }
 

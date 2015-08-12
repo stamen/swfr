@@ -1,14 +1,15 @@
 "use strict";
 
 var fs = require('fs'),
-    path = require('path');
+    path = require('path'),
+    util = require("util");
 
 var tmp = require('tmp');
 
-var output = require("./output"),
-    shell = require("./shell");
+var output = require("../../lib/output"),
+    shell = require("../../lib/shell");
 
-module.exports = function buildVRT(files, outputUri, callback) {
+module.exports = function buildVRT(files, outputUri, options, callback) {
   return output(outputUri, callback, function(err, localOutputPath, done) {
     if (err) {
       return callback(err);
@@ -30,14 +31,20 @@ module.exports = function buildVRT(files, outputUri, callback) {
       });
         
       stream.on("finish", function() {
-        var args = [
+        var args = [];
+
+        if ("nodata" in options) {
+          args = args.concat(["-srcnodata", options.nodata + '']);
+        }
+
+        args = args.concat([
           "-input_file_list", fileList,
           localOutputPath
-        ];
+        ]);
 
         return shell("gdalbuildvrt", args, {}, function(err) {
           fs.unlink(fileList, function() {});
-          return done(err);
+          return done.apply(null, arguments);
         });
       });
         
