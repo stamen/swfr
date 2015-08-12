@@ -10,7 +10,7 @@ var shell = require("../../lib/shell");
  *
  * @returns [horizontal size, vertical size]
  */
-module.exports = function getPixelSize(uri, callback) {
+module.exports = function getPixelSize(uri, done) {
   uri = url.parse(uri);
 
   var args = [
@@ -19,7 +19,7 @@ module.exports = function getPixelSize(uri, callback) {
 
   return shell("gdalinfo", args, {}, function(err, stdout) {
     if (err) {
-      return callback(err);
+      return done.apply(null, arguments);
     }
 
     var size = stdout.split("\n").filter(function(line) {
@@ -32,7 +32,7 @@ module.exports = function getPixelSize(uri, callback) {
     .map(Number)
     .map(Math.abs);
 
-    return callback(null, size);
+    return done(null, size);
   });
 };
 

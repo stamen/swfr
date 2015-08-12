@@ -85,7 +85,7 @@ module.exports = function resample(localInputPath, outputUri, options, callback)
       timeout: 10 * 60e3 // 10 minutes
     }, function(err) {
       if (err) {
-        return done(err);
+      return done.apply(null, arguments);
       }
 
       // TODO: We want a way to filter out tiles that are strictly filled with NoData.

@@ -16,7 +16,7 @@ var COORDINATE_REGEX = /([\[\(])([^,]*),(.*?)([\]\)])/;
  *
  * @returns [upper left, lower right]
  */
-module.exports = function getInfo(uri, callback) {
+module.exports = function getInfo(uri, done) {
   var args = [
     "-nofl", // In case this is a VRT with too many files to be caught in stdout
     uri
@@ -24,7 +24,7 @@ module.exports = function getInfo(uri, callback) {
 
   return shell("gdalinfo", args, {}, function(err, stdout) {
     if (err) {
-      return callback(err);
+      return done.apply(null, arguments);
     }
 
     var lines = stdout.split("\n");
@@ -51,7 +51,7 @@ module.exports = function getInfo(uri, callback) {
       return [x, y];
     })[0];
 
-    return callback(null, { uri: uri, extent: extent, resolution: resolution });
+    return done(null, { uri: uri, extent: extent, resolution: resolution });
   });
 };
 
