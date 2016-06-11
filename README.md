@@ -31,13 +31,13 @@ This is an example decider:
 Activities represent discrete units of computation (or behavior). Given an
 input, they produce an output.
 
-There are two ways you can handle activites inside an activity worker.
+There are two ways you can handle activities inside an activity worker.
 One way is to pass in a function and manually handle the activities,
 as is shown in the `examples/activities.js` example worker.
 
 The second way is to write all of your activies in a folder, and then pass that directory
 into the activity worker. The activity worker will then pull an activity to
-execute from SWF, match it up to the activity in the provided activites folder,
+execute from SWF, match it up to the activity in the provided activities folder,
 and execute that code.
 
 For instance, and activity worker script would look like this:
@@ -70,7 +70,7 @@ async.times(os.cpus().length, function(i) {
 });
 ```
 
-In this case, our activites live inside the `lib/activites` folder that exists under
+In this case, our activities live inside the `lib/activities` folder that exists under
 the folder our activity worker is in. The above activity worker spins up a process that will
 poll SWF for activities for each CPU on the machine. Once an activity is pulled of the task list,
 swfr will match that activity by name and version to one in the `activityFolder` passed in.
